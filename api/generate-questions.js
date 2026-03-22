@@ -6,7 +6,7 @@ export default async function handler(req, res) {
 
     const { subject, topic, level, difficulty, numQuestions } = req.body;
 
-    const prompt = `Generate ${numQuestions} practice questions for ${subject} on the topic of ${topic} at ${level} level with difficulty ${difficulty}/10. 
+    const prompt = `Generate exactly ${numQuestions} practice questions for ${subject} on the topic of ${topic} at ${level} level with difficulty ${difficulty}/10.
 Return the questions as a JSON array of strings. For example: ["Question 1", "Question 2", ...]. Only output the JSON array, no other text.`;
 
     try {
@@ -19,31 +19,43 @@ Return the questions as a JSON array of strings. For example: ["Question 1", "Qu
             body: JSON.stringify({
                 model: 'deepseek-chat',
                 messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7
+                temperature: 0.7,
+                max_tokens: 1000
             })
         });
 
         const data = await response.json();
         const aiContent = data.choices[0].message.content;
-        // Parse the JSON array
+
+        // Attempt to extract JSON from the response
         let questions;
         try {
+            // Try to parse the whole content as JSON
             questions = JSON.parse(aiContent);
         } catch (e) {
-            // If parsing fails, try to extract array with regex
-            const match = aiContent.match(/\[.*\]/s);
-            if (match) {
-                questions = JSON.parse(match[0]);
+            // Fallback: find the first '[' and last ']' and parse that substring
+            const start = aiContent.indexOf('[');
+            const end = aiContent.lastIndexOf(']') + 1;
+            if (start !== -1 && end > start) {
+                const jsonStr = aiContent.substring(start, end);
+                questions = JSON.parse(jsonStr);
             } else {
-                throw new Error('AI response was not valid JSON');
+                throw new Error('Could not find JSON array in AI response');
             }
         }
+
         if (!Array.isArray(questions)) {
-            throw new Error('AI did not return an array');
+            throw new Error('AI response is not an array');
         }
+
+        // Ensure we have exactly the requested number (or less if AI limited)
+        if (questions.length > numQuestions) {
+            questions = questions.slice(0, numQuestions);
+        }
+
         res.status(200).json({ questions });
     } catch (error) {
-        console.error(error);
+        console.error('Error in generate-questions:', error);
         res.status(500).json({ error: 'Failed to generate questions', details: error.message });
     }
 }
