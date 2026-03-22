@@ -1,119 +1,144 @@
-// js/dashboard.js
-// This script assumes the DOM elements exist and that questions.js is loaded.
-
+// js/dashboard.js – version for the new dashboard HTML
 document.addEventListener('DOMContentLoaded', () => {
-    // Elements
-    const subjectSelect = document.getElementById('subject');
-    const topicSelect = document.getElementById('topic');
-    const levelSelect = document.getElementById('level');
+    // DOM elements from the new HTML
     const generateBtn = document.getElementById('generateBtn');
-    const questionSpan = document.getElementById('questionText');
-    const answerTextarea = document.getElementById('answerInput');
-    const submitBtn = document.getElementById('submitBtn');
-    const feedbackDiv = document.getElementById('feedback');
-    const customQuestionTextarea = document.getElementById('customQuestion');
-    const customModelAnswerTextarea = document.getElementById('customModelAnswer');
-    const setCustomBtn = document.getElementById('setCustomBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const questionsPanel = document.getElementById('questionsPanel');
+    const questionsList = document.getElementById('questionsList');
+    const loadingDiv = document.getElementById('loading');
+    const submitAnswersBtn = document.getElementById('submitAnswersBtn');
 
-    // State
-    let currentQuestionText = "";
-    let customMode = false;
-    let customModelHint = "";
+    let currentQuestions = [];      // array of question strings
+    let answers = [];               // array of user answers (parallel)
 
-    // Initial update of topics (from questions.js)
-    if (typeof updateTopics === 'function') updateTopics();
-
-    // Function to generate random question
-    function generateRandomQuestion() {
-        const subject = subjectSelect.value;
-        const topic = topicSelect.value;
-        const level = levelSelect.value;
-        const q = getRandomQuestion(subject, topic, level);
-        currentQuestionText = q;
-        questionSpan.innerText = q;
-        customMode = false;
-        customModelHint = "";
-        answerTextarea.value = "";
-        feedbackDiv.classList.add('hidden');
+    function setLoading(show) {
+        if (show) {
+            loadingDiv.classList.remove('hidden');
+            questionsPanel.classList.add('hidden');
+        } else {
+            loadingDiv.classList.add('hidden');
+        }
     }
 
-    // Function to set custom question
-    function setCustomQuestion() {
-        const customQ = customQuestionTextarea.value.trim();
-        if (!customQ) {
-            alert('Please enter a custom question.');
-            return;
-        }
-        currentQuestionText = customQ;
-        customMode = true;
-        customModelHint = customModelAnswerTextarea.value.trim();
-        questionSpan.innerText = customQ;
-        answerTextarea.value = "";
-        feedbackDiv.classList.add('hidden');
-    }
+    // Generate questions via backend
+    generateBtn.addEventListener('click', async () => {
+        const subject = document.getElementById('subject').value.trim();
+        const topic = document.getElementById('topic').value.trim();
+        const level = document.getElementById('level').value;
+        const difficulty = parseInt(document.getElementById('difficulty').value);
+        const numQuestions = parseInt(document.getElementById('numQuestions').value);
 
-    // Event listeners
-    generateBtn.addEventListener('click', generateRandomQuestion);
-    setCustomBtn.addEventListener('click', setCustomQuestion);
-    subjectSelect.addEventListener('change', () => {
-        if (typeof updateTopics === 'function') updateTopics();
-        generateRandomQuestion();
-    });
-    topicSelect.addEventListener('change', generateRandomQuestion);
-    levelSelect.addEventListener('change', generateRandomQuestion);
-
-    // Submit for marking
-    submitBtn.addEventListener('click', async () => {
-        const question = currentQuestionText;
-        const userAnswer = answerTextarea.value.trim();
-        if (!question || question === 'Click "Generate Question" to start') {
-            alert('Please generate or upload a question first.');
-            return;
-        }
-        if (!userAnswer) {
-            alert('Please write your answer.');
+        if (!subject || !topic) {
+            alert('Please fill in both subject and topic.');
             return;
         }
 
-        submitBtn.disabled = true;
-        submitBtn.innerText = 'Marking...';
+        setLoading(true);
 
         try {
-            const response = await fetch('/api/mark', {
+            const response = await fetch('/api/generate-questions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subject, topic, level, difficulty, numQuestions })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to generate questions');
+
+            currentQuestions = data.questions; // array of strings
+            answers = new Array(currentQuestions.length).fill('');
+
+            renderQuestions();
+            questionsPanel.classList.remove('hidden');
+        } catch (err) {
+            console.error(err);
+            alert('Error generating questions: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    });
+
+    // Render the list of questions with answer textareas
+    function renderQuestions() {
+        questionsList.innerHTML = '';
+        currentQuestions.forEach((q, idx) => {
+            const div = document.createElement('div');
+            div.className = 'question-item';
+            div.innerHTML = `
+                <div class="question-text">${idx+1}. ${q}</div>
+                <textarea class="answer-input" data-idx="${idx}" rows="3" placeholder="Type your answer here...">${answers[idx]}</textarea>
+                <div id="feedback-${idx}" class="feedback-item hidden"></div>
+            `;
+            questionsList.appendChild(div);
+        });
+
+        // Attach input listeners to update answers array
+        document.querySelectorAll('.answer-input').forEach(textarea => {
+            textarea.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.idx);
+                answers[idx] = e.target.value;
+            });
+        });
+    }
+
+    // Clear everything
+    clearBtn.addEventListener('click', () => {
+        currentQuestions = [];
+        answers = [];
+        questionsPanel.classList.add('hidden');
+        questionsList.innerHTML = '';
+        // Optionally reset form fields
+        document.getElementById('subject').value = 'Mathematics';
+        document.getElementById('topic').value = 'Algebra';
+        document.getElementById('level').value = 'KS3';
+        document.getElementById('difficulty').value = '5';
+        document.getElementById('difficultyValue').textContent = '5';
+        document.getElementById('numQuestions').value = '5';
+    });
+
+    // Submit all answers for marking
+    submitAnswersBtn.addEventListener('click', async () => {
+        // Check if any answer is empty
+        const emptyIndex = answers.findIndex(a => !a.trim());
+        if (emptyIndex !== -1) {
+            alert(`Please answer question ${emptyIndex+1} before submitting.`);
+            return;
+        }
+
+        submitAnswersBtn.disabled = true;
+        submitAnswersBtn.textContent = 'Marking...';
+
+        try {
+            const response = await fetch('/api/mark-batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    question: question,
-                    userAnswer: userAnswer,
-                    modelAnswerHint: customMode ? customModelHint : ''
+                    questions: currentQuestions,
+                    answers: answers
                 })
             });
-            const data = await response.json();
-            if (response.ok) {
-                displayFeedback(data);
-            } else {
-                alert('Error: ' + (data.error || 'Something went wrong'));
-            }
+            const results = await response.json();
+            if (!response.ok) throw new Error(results.error || 'Marking failed');
+
+            // Display feedback for each question
+            results.forEach((result, idx) => {
+                const feedbackDiv = document.getElementById(`feedback-${idx}`);
+                if (feedbackDiv) {
+                    feedbackDiv.innerHTML = `
+                        <div class="score">Score: ${result.score}/10</div>
+                        <strong>✅ Strengths:</strong>
+                        <ul>${result.strengths.map(s => `<li>${s}</li>`).join('')}</ul>
+                        <strong>📝 Areas to improve:</strong>
+                        <ul>${result.improvements.map(i => `<li>${i}</li>`).join('')}</ul>
+                    `;
+                    feedbackDiv.classList.remove('hidden');
+                }
+            });
         } catch (err) {
             console.error(err);
-            alert('Network error. Please try again.');
+            alert('Error marking answers: ' + err.message);
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'Submit for Marking';
+            submitAnswersBtn.disabled = false;
+            submitAnswersBtn.textContent = 'Submit Answers';
         }
     });
-
-    function displayFeedback(result) {
-        feedbackDiv.innerHTML = `
-            <div class="score">Score: ${result.score}/10</div>
-            <h3>✅ Strengths</h3>
-            <ul>${result.strengths.map(s => `<li>${s}</li>`).join('')}</ul>
-            <h3>📝 Areas to Improve</h3>
-            <ul>${result.improvements.map(i => `<li>${i}</li>`).join('')}</ul>
-        `;
-        feedbackDiv.classList.remove('hidden');
-    }
-
-    // Initial random question
-    generateRandomQuestion();
 });
