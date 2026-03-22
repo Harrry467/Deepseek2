@@ -8,84 +8,87 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* Dashboard specific styles */
+        /* New dashboard specific styles */
         .dashboard-container {
             max-width: 1200px;
             margin: 2rem auto;
             padding: 0 1.5rem;
         }
-        .dashboard-header {
-            text-align: center;
+        .config-panel {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
             margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
-        .controls-grid {
+        .config-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
         }
-        .control-group label {
+        .config-group label {
             display: block;
             font-weight: 600;
             margin-bottom: 0.25rem;
         }
-        select, textarea {
+        .config-group input, .config-group select {
             width: 100%;
             padding: 0.5rem;
             border-radius: 0.5rem;
             border: 1px solid #cbd5e1;
         }
-        .question-card {
+        .difficulty-slider {
+            width: 100%;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .questions-panel {
             background: white;
             border-radius: 1rem;
             padding: 1.5rem;
             margin-bottom: 2rem;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
-        .question-header {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            color: #3b82f6;
+        .question-item {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 1rem 0;
         }
-        .answer-area textarea {
-            margin: 1rem 0;
+        .question-item:last-child {
+            border-bottom: none;
+        }
+        .question-text {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .answer-input {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 0.5rem;
             resize: vertical;
         }
-        .feedback {
-            margin-top: 1rem;
-            padding: 1rem;
+        .feedback-item {
             background: #f1f5f9;
             border-radius: 0.5rem;
-            border-left: 4px solid #3b82f6;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        .score {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
         }
         .hidden {
             display: none;
         }
-        .score {
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-        .upload-card {
-            background: white;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        }
-        .upload-fields {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin: 1rem 0;
-        }
-        @media (max-width: 768px) {
-            .upload-fields {
-                grid-template-columns: 1fr;
-            }
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            font-style: italic;
         }
     </style>
 </head>
@@ -103,69 +106,56 @@
     </nav>
 
     <div class="dashboard-container">
-        <div class="dashboard-header">
-            <h1>Your Learning Studio</h1>
-            <p>Select a subject, topic, and level to generate questions. Submit your answer for AI marking.</p>
-        </div>
+        <h1>Your Learning Studio</h1>
+        <p>Tell us what you want to learn, and we'll generate questions tailored to you.</p>
 
-        <!-- Controls -->
-        <div class="controls-grid">
-            <div class="control-group">
-                <label><i class="fas fa-book"></i> Subject</label>
-                <select id="subject">
-                    <option value="maths">Mathematics</option>
-                    <option value="physics">Physics</option>
-                    <option value="chemistry">Chemistry</option>
-                    <option value="biology">Biology</option>
-                    <option value="english">English</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label><i class="fas fa-tag"></i> Topic</label>
-                <select id="topic"></select>
-            </div>
-            <div class="control-group">
-                <label><i class="fas fa-chart-simple"></i> Level</label>
-                <select id="level">
-                    <option value="KS3">KS3 (Ages 11-14)</option>
-                    <option value="GCSE">GCSE (Ages 14-16)</option>
-                    <option value="ALevel">A-Level (Ages 16-18)</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <button id="generateBtn" class="btn-primary"><i class="fas fa-shuffle"></i> Generate Question</button>
-            </div>
-        </div>
-
-        <!-- Question & Answer Card -->
-        <div class="question-card">
-            <div class="question-header">
-                <i class="fas fa-question-circle"></i>
-                <span id="questionText">Click "Generate Question" to start</span>
-            </div>
-            <div class="answer-area">
-                <textarea id="answerInput" rows="5" placeholder="Type your answer here..."></textarea>
-                <button id="submitBtn" class="btn-primary"><i class="fas fa-robot"></i> Submit for Marking</button>
-            </div>
-            <div id="feedback" class="feedback hidden"></div>
-        </div>
-
-        <!-- Custom Question Upload -->
-        <div class="upload-card">
-            <h3><i class="fas fa-upload"></i> Upload Your Own Question</h3>
-            <p>Paste a custom question and its model answer, then click "Use This Question".</p>
-            <div class="upload-fields">
-                <div class="field-group">
-                    <label>Your Question</label>
-                    <textarea id="customQuestion" rows="2" placeholder="e.g., Solve for x: 3x + 5 = 20"></textarea>
+        <!-- Configuration panel -->
+        <div class="config-panel">
+            <h3><i class="fas fa-sliders-h"></i> Question Settings</h3>
+            <div class="config-grid">
+                <div class="config-group">
+                    <label>Subject</label>
+                    <input type="text" id="subject" placeholder="e.g., Mathematics" value="Mathematics">
                 </div>
-                <div class="field-group">
-                    <label>Model Answer (optional)</label>
-                    <textarea id="customModelAnswer" rows="2" placeholder="e.g., x = 5"></textarea>
+                <div class="config-group">
+                    <label>Topic</label>
+                    <input type="text" id="topic" placeholder="e.g., Algebra, Geometry" value="Algebra">
+                </div>
+                <div class="config-group">
+                    <label>Level</label>
+                    <select id="level">
+                        <option value="KS3">KS3 (Ages 11-14)</option>
+                        <option value="GCSE">GCSE (Ages 14-16)</option>
+                        <option value="ALevel">A-Level (Ages 16-18)</option>
+                    </select>
+                </div>
+                <div class="config-group">
+                    <label>Difficulty (1–10)</label>
+                    <input type="range" id="difficulty" min="1" max="10" value="5" class="difficulty-slider">
+                    <span id="difficultyValue">5</span>
+                </div>
+                <div class="config-group">
+                    <label>Number of Questions</label>
+                    <input type="number" id="numQuestions" min="1" max="20" value="5">
                 </div>
             </div>
-            <button id="setCustomBtn" class="btn-outline"><i class="fas fa-save"></i> Use This Question</button>
+            <div class="action-buttons">
+                <button id="generateBtn" class="btn-primary"><i class="fas fa-magic"></i> Generate Questions</button>
+                <button id="clearBtn" class="btn-outline"><i class="fas fa-eraser"></i> Clear</button>
+            </div>
         </div>
+
+        <!-- Questions panel (initially hidden) -->
+        <div id="questionsPanel" class="questions-panel hidden">
+            <h3><i class="fas fa-list"></i> Your Questions</h3>
+            <div id="questionsList"></div>
+            <div class="action-buttons" style="margin-top: 1rem;">
+                <button id="submitAnswersBtn" class="btn-primary"><i class="fas fa-check-circle"></i> Submit Answers</button>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loading" class="loading hidden">Generating questions, please wait...</div>
     </div>
 
     <footer>
@@ -177,10 +167,9 @@
         <div class="copyright"><p>&copy; 2025 SmartTutor. All rights reserved.</p></div>
     </footer>
 
-    <script src="js/questions.js"></script>
     <script src="js/dashboard.js"></script>
     <script>
-        // Update login/logout button based on session
+        // Update login/logout button
         const user = JSON.parse(localStorage.getItem('smarttutor_user'));
         const loginBtn = document.getElementById('loginLogoutBtn');
         if (user && user.email) {
@@ -195,6 +184,13 @@
             loginBtn.innerText = 'Login';
             loginBtn.href = 'login.html';
         }
+
+        // Update difficulty value display
+        const difficultySlider = document.getElementById('difficulty');
+        const difficultySpan = document.getElementById('difficultyValue');
+        difficultySlider.addEventListener('input', () => {
+            difficultySpan.textContent = difficultySlider.value;
+        });
     </script>
 </body>
 </html>
