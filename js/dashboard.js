@@ -81,13 +81,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ subject, topic, level, difficulty, numQuestions })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to generate questions');
+
+      // CRITICAL: Try to parse JSON, but handle non‑JSON responses
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        // If JSON parsing fails, the server likely returned HTML or plain text
+        throw new Error('Server returned an invalid response. Please try again.');
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate questions');
+      }
 
       currentQuestions = data.questions;
       sessionId = data.sessionId || null;
-      // questionIds come back as null until we have a way to fetch them;
-      // for batch marking we rely on sessionId to look them up server-side
       questionIds = data.questionIds || [];
       answers = new Array(currentQuestions.length).fill('');
 
@@ -141,8 +150,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           sessionId
         })
       });
-      const results = await response.json();
-      if (!response.ok) throw new Error(results.error || 'Marking failed');
+
+      let results;
+      try {
+        results = await response.json();
+      } catch (e) {
+        throw new Error('Server returned invalid response for marking.');
+      }
+
+      if (!response.ok) {
+        throw new Error(results.error || 'Marking failed');
+      }
 
       results.forEach((result, idx) => {
         const feedbackDiv = document.getElementById(`feedback-${idx}`);
