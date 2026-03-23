@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My History – SmartTutor</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .history-container { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .session-card { background: var(--card-bg, #fff); border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; cursor: pointer; transition: box-shadow .15s; }
+    .session-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+    .session-meta { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: .5rem; }
+    .session-badge { font-size: .75rem; font-weight: 600; padding: .2rem .6rem; border-radius: 99px; background: #f3f4f6; color: #374151; }
+    .session-score { font-size: 1.4rem; font-weight: 700; color: #10b981; }
+    .session-score.low { color: #ef4444; }
+    .session-score.mid { color: #f59e0b; }
+    .session-date { font-size: .8rem; color: #9ca3af; }
+    .session-detail { display: none; margin-top: 1rem; border-top: 1px solid #f3f4f6; padding-top: 1rem; }
+    .session-detail.open { display: block; }
+    .question-row { margin-bottom: 1rem; }
+    .question-row .q-text { font-weight: 500; margin-bottom: .3rem; }
+    .question-row .q-answer { color: #6b7280; font-size: .9rem; margin-bottom: .25rem; }
+    .question-row .q-score { font-size: .85rem; font-weight: 600; }
+    .empty-state { text-align: center; padding: 4rem 1rem; color: #9ca3af; }
+    .empty-state a { color: #6366f1; text-decoration: none; font-weight: 600; }
+    .loading-msg { text-align: center; padding: 3rem; color: #9ca3af; }
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; }
+    .stat-label { font-size: .75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; color: #111827; margin-top: .2rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand"><a href="dashboard.html">SmartTutor</a></div>
+    <div class="nav-links">
+      <a href="dashboard.html">Practice</a>
+      <a href="history.html" class="active">History</a>
+      <button onclick="logout()" class="btn btn-secondary btn-sm">Log out</button>
+    </div>
+  </nav>
+
+  <div class="history-container">
+    <div class="history-header">
+      <h1>My history</h1>
+    </div>
+
+    <div id="statsBar" class="stats-bar" style="display:none"></div>
+    <div id="historyList"><p class="loading-msg">Loading your history…</p></div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      await requireAuth();
+
+      try {
+        const authHeaders = await getAuthHeader();
+        const res = await fetch('/api/history', { headers: authHeaders });
+        if (!res.ok) throw new Error('Failed to load history');
+        const sessions = await res.json();
+
+        const listEl = document.getElementById('historyList');
+        const statsEl = document.getElementById('statsBar');
+
+        if (!sessions.length) {
+          listEl.innerHTML = `<div class="empty-state"><p>No practice sessions yet.</p><p><a href="dashboard.html">Start practising</a> to see your history here.</p></div>`;
+          return;
+        }
+
+        // Overall stats
+        const allScores = sessions.flatMap(s => s.questions?.flatMap(q => q.answers?.map(a => a.score) || []) || []).filter(s => typeof s === 'number');
+        const overallAvg = allScores.length ? (allScores.reduce((a,b)=>a+b,0)/allScores.length).toFixed(1) : '—';
+        const totalAnswered = sessions.reduce((a,s) => a + (s.answeredCount||0), 0);
+
+        statsEl.style.display = 'grid';
+        statsEl.innerHTML = `
+          <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value">${sessions.length}</div></div>
+          <div class="stat-card"><div class="stat-label">Questions answered</div><div class="stat-value">${totalAnswered}</div></div>
+          <div class="stat-card"><div class="stat-label">Average score</div><div class="stat-value">${overallAvg}${allScores.length ? '/10' : ''}</div></div>
+        `;
+
+        // Session cards
+        listEl.innerHTML = sessions.map((session, si) => {
+          const scoreClass = session.avgScore === null ? '' : session.avgScore >= 7 ? '' : session.avgScore >= 5 ? 'mid' : 'low';
+          const scoreDisplay = session.avgScore !== null ? `${session.avgScore}/10` : 'Not marked';
+          const date = new Date(session.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+
+          const questionsHTML = (session.questions || []).map(q => {
+            const ans = q.answers?.[0];
+            return `<div class="question-row">
+              <div class="q-text">${escapeHtml(q.question_text)}</div>
+              ${ans ? `<div class="q-answer">Your answer: ${escapeHtml(ans.answer_text || '')}</div>
+              <div class="q-score">Score: ${ans.score}/10</div>` : '<div class="q-answer" style="color:#d1d5db">Not answered</div>'}
+            </div>`;
+          }).join('');
+
+          return `<div class="session-card" onclick="toggleDetail(${si})">
+            <div class="session-meta">
+              <span class="session-badge">${escapeHtml(session.subject || '')}</span>
+              <span class="session-badge">${escapeHtml(session.topic || '')}</span>
+              <span class="session-badge">${escapeHtml(session.level || '')}</span>
+              <span class="session-date">${date}</span>
+              <span style="flex:1"></span>
+              <span class="session-score ${scoreClass}">${scoreDisplay}</span>
+            </div>
+            <div style="font-size:.85rem;color:#6b7280">${session.answeredCount || 0} of ${session.totalQuestions || 0} answered</div>
+            <div id="detail-${si}" class="session-detail">${questionsHTML}</div>
+          </div>`;
+        }).join('');
+
+      } catch (err) {
+        document.getElementById('historyList').innerHTML = `<p style="color:#ef4444;text-align:center">Failed to load history: ${err.message}</p>`;
+      }
+    });
+
+    function toggleDetail(idx) {
+      const el = document.getElementById(`detail-${idx}`);
+      if (el) el.classList.toggle('open');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
