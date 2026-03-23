@@ -1,0 +1,280 @@
+<!-- profile.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile | SmartTutor</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* Additional profile styles */
+    .profile-container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #3b82f6;
+    }
+    .stat-label {
+      color: #64748b;
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+    .xp-bar-container {
+      background: #e2e8f0;
+      border-radius: 1rem;
+      overflow: hidden;
+      margin: 1rem 0;
+      height: 1.5rem;
+      position: relative;
+    }
+    .xp-bar-fill {
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      width: 0%;
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .xp-text {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      text-align: center;
+      line-height: 1.5rem;
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 0 2px rgba(0,0,0,0.5);
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      margin-top: 1rem;
+    }
+    .history-table th,
+    .history-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .history-table th {
+      background: #f1f5f9;
+      cursor: pointer;
+      user-select: none;
+    }
+    .history-table th:hover {
+      background: #e2e8f0;
+    }
+    .score-high {
+      color: #10b981;
+      font-weight: bold;
+    }
+    .score-mid {
+      color: #f59e0b;
+      font-weight: bold;
+    }
+    .score-low {
+      color: #ef4444;
+      font-weight: bold;
+    }
+    .loading {
+      text-align: center;
+      padding: 2rem;
+    }
+    .sort-select {
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      border: 1px solid #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container nav-container">
+      <div class="logo"><i class="fas fa-brain"></i> Smart<span>Tutor</span></div>
+      <div class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="profile.html" class="active">My Profile</a>
+        <a href="#" id="logoutBtn" class="btn-outline-small">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="profile-container">
+    <h1>My Profile</h1>
+    <div id="statsGrid" class="stats-grid"></div>
+
+    <h2>XP Progress</h2>
+    <div class="xp-bar-container">
+      <div id="xpFill" class="xp-bar-fill"></div>
+      <div id="xpText" class="xp-text"></div>
+    </div>
+
+    <h2>Answer History</h2>
+    <div>
+      <label for="sortField">Sort by: </label>
+      <select id="sortField" class="sort-select">
+        <option value="date">Date (newest first)</option>
+        <option value="date_asc">Date (oldest first)</option>
+        <option value="score_desc">Score (high to low)</option>
+        <option value="score_asc">Score (low to high)</option>
+      </select>
+    </div>
+    <div id="historyContainer">
+      <div class="loading">Loading your history...</div>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Ensure user is logged in
+      const user = await requireAuth();
+      if (!user) return;
+
+      // Logout button
+      document.getElementById('logoutBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        logout();
+      });
+
+      // Fetch stats
+      let statsData = null;
+      try {
+        const authHeaders = await getAuthHeader();
+        const res = await fetch('/api/user-stats', { headers: authHeaders });
+        if (!res.ok) throw new Error('Failed to load stats');
+        statsData = await res.json();
+      } catch (err) {
+        console.error(err);
+        document.getElementById('statsGrid').innerHTML = '<p class="error">Could not load stats. Please try again later.</p>';
+        return;
+      }
+
+      // Render stats grid
+      const renderStats = () => {
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = `
+          <div class="stat-card"><div class="stat-value">${statsData.totalXp}</div><div class="stat-label">Total XP</div></div>
+          <div class="stat-card"><div class="stat-value">${statsData.xpToday}</div><div class="stat-label">Today</div></div>
+          <div class="stat-card"><div class="stat-value">${statsData.xpWeek}</div><div class="stat-label">This Week</div></div>
+          <div class="stat-card"><div class="stat-value">${statsData.xpMonth}</div><div class="stat-label">This Month</div></div>
+          <div class="stat-card"><div class="stat-value">${statsData.xpYear}</div><div class="stat-label">This Year</div></div>
+        `;
+
+        // XP bar – set a max (e.g., 5000)
+        const maxXp = 10000; // Adjust as needed
+        const percent = Math.min(100, (statsData.totalXp / maxXp) * 100);
+        document.getElementById('xpFill').style.width = `${percent}%`;
+        document.getElementById('xpText').innerText = `${statsData.totalXp} / ${maxXp} XP`;
+      };
+
+      // Render sortable table
+      const renderHistory = (sortField) => {
+        let sorted = [...statsData.answers];
+        switch (sortField) {
+          case 'date':
+            sorted.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            break;
+          case 'date_asc':
+            sorted.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+            break;
+          case 'score_desc':
+            sorted.sort((a,b) => b.score - a.score);
+            break;
+          case 'score_asc':
+            sorted.sort((a,b) => a.score - b.score);
+            break;
+          default:
+            sorted.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+        }
+
+        const container = document.getElementById('historyContainer');
+        if (!sorted.length) {
+          container.innerHTML = '<p>No answers yet. Go to the dashboard and start learning!</p>';
+          return;
+        }
+
+        const tableHtml = `
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th data-sort="date">Date</th>
+                <th>Subject</th>
+                <th>Topic</th>
+                <th>Question</th>
+                <th data-sort="score">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sorted.map(a => {
+                const scoreClass = a.score >= 7 ? 'score-high' : (a.score >= 4 ? 'score-mid' : 'score-low');
+                return `
+                  <tr>
+                    <td>${new Date(a.createdAt).toLocaleDateString()}</td>
+                    <td>${escapeHtml(a.subject || '—')}</td>
+                    <td>${escapeHtml(a.topic || '—')}</td>
+                    <td>${escapeHtml(a.questionText)}</td>
+                    <td class="${scoreClass}">${a.score}/10</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+        container.innerHTML = tableHtml;
+
+        // Add sort listeners to headers
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+          th.addEventListener('click', () => {
+            const field = th.dataset.sort === 'date' ? 'date' : 'score_desc';
+            renderHistory(field);
+            // Update select to match
+            document.getElementById('sortField').value = field === 'date' ? 'date' : 'score_desc';
+          });
+        });
+      };
+
+      // Initial render
+      renderStats();
+      renderHistory('date');
+
+      // Sort dropdown listener
+      document.getElementById('sortField').addEventListener('change', (e) => {
+        renderHistory(e.target.value);
+      });
+    });
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
