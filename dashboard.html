@@ -106,6 +106,39 @@
       margin-bottom: 1rem;
       color: #3b82f6;
     }
+    /* XP bar styles */
+    .xp-summary {
+      background: white;
+      border-radius: 1rem;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgb(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .xp-bar-container {
+      background: #e2e8f0;
+      border-radius: 1rem;
+      overflow: hidden;
+      height: 1.2rem;
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+    .xp-bar-fill {
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      width: 0%;
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .xp-text {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #3b82f6;
+    }
   </style>
 </head>
 <body>
@@ -116,7 +149,8 @@
         <li><a href="index.html">Home</a></li>
         <li><a href="pricing.html">Pricing</a></li>
         <li><a href="dashboard.html" class="active">Dashboard</a></li>
-        <li><a href="login.html" class="btn-outline-small" id="loginLogoutBtn">Login</a></li>
+        <li><a href="profile.html">My Profile</a></li>
+        <li><a href="#" class="btn-outline-small" id="loginLogoutBtn">Login</a></li>
       </ul>
     </div>
   </nav>
@@ -124,6 +158,14 @@
   <div class="dashboard-container">
     <h1>Your Learning Studio</h1>
     <p>Tell us what you want to learn, and we'll generate questions tailored to you.</p>
+
+    <!-- XP Summary (will be filled by JS) -->
+    <div id="xpSummary" class="xp-summary hidden">
+      <span class="xp-text">XP: <span id="xpTotal">0</span></span>
+      <div class="xp-bar-container">
+        <div id="xpFill" class="xp-bar-fill"></div>
+      </div>
+    </div>
 
     <!-- Configuration panel -->
     <div class="config-panel">
@@ -200,30 +242,33 @@
     </div>
   </footer>
 
+  <script src="js/auth.js"></script>
   <script src="js/dashboard.js"></script>
   <script>
-    // Update login/logout button
-    const user = JSON.parse(localStorage.getItem('smarttutor_user'));
-    const loginBtn = document.getElementById('loginLogoutBtn');
-    if (user && user.email) {
-      loginBtn.innerHTML = 'Logout';
-      loginBtn.href = '#';
-      loginBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        localStorage.removeItem('smarttutor_user');
-        window.location.href = 'index.html';
-      });
-    } else {
-      loginBtn.innerHTML = 'Login';
-      loginBtn.href = 'login.html';
-    }
-
-    // Update difficulty value display
+    // Difficulty slider display
     const difficultySlider = document.getElementById('difficulty');
     const difficultySpan = document.getElementById('difficultyValue');
     difficultySlider.addEventListener('input', () => {
       difficultySpan.textContent = difficultySlider.value;
     });
+
+    // Login/logout handling using auth.js
+    (async () => {
+      const user = await getCurrentUser();
+      const loginBtn = document.getElementById('loginLogoutBtn');
+      if (user) {
+        loginBtn.innerHTML = 'Logout';
+        loginBtn.href = '#';
+        loginBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await logout();
+          window.location.href = 'index.html';
+        });
+      } else {
+        loginBtn.innerHTML = 'Login';
+        loginBtn.href = 'login.html';
+      }
+    })();
   </script>
 </body>
 </html>
