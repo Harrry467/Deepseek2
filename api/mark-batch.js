@@ -94,6 +94,31 @@ Output only the JSON array, no other text.`;
         improvements: result.improvements
       }));
       await supabase.from('answers').insert(answerRows);
+
+      // ========== NEW: Update user XP ==========
+      // Calculate total XP earned from this batch (score * 10 per answer)
+      const xpEarned = results.reduce((sum, result) => sum + (result.score * 10), 0);
+
+      // Fetch current user profile (XP)
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('xp')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        // If some other error, log it but don't fail the request
+        console.error('Error fetching user profile:', profileError);
+      }
+
+      if (!profile) {
+        // No profile exists – create one (shouldn't happen with trigger, but just in case)
+        await supabase.from('user_profiles').insert({ id: user.id, xp: xpEarned });
+      } else {
+        const newXp = (profile.xp || 0) + xpEarned;
+        await supabase.from('user_profiles').update({ xp: newXp }).eq('id', user.id);
+      }
+      // ========================================
     }
 
     res.status(200).json(results);
