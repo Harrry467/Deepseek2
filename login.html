@@ -1,44 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | SmartTutor</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="css/auth.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | SmartTutor</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container nav-container">
-            <div class="logo"><i class="fas fa-brain"></i> Smart<span>Tutor</span></div>
-            <ul class="nav-links">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="pricing.html">Pricing</a></li>
-                <li><a href="dashboard.html">Dashboard</a></li>
-            </ul>
-        </div>
-    </nav>
-
-    <div class="auth-container">
-        <div class="auth-card">
-            <h2>Welcome back</h2>
-            <form id="loginForm">
-                <div class="input-group">
-                    <label>Email</label>
-                    <input type="email" id="email" required>
-                </div>
-                <div class="input-group">
-                    <label>Password</label>
-                    <input type="password" id="password" required>
-                </div>
-                <button type="submit" class="btn-primary">Log in</button>
-            </form>
-            <p>Don't have an account? <a href="signup.html">Sign up</a></p>
-        </div>
+  <nav class="navbar">
+    <div class="container nav-container">
+      <div class="logo"><i class="fas fa-brain"></i> Smart<span>Tutor</span></div>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="dashboard.html">Dashboard</a></li>
+      </ul>
     </div>
+  </nav>
 
-    <script src="js/auth.js"></script>
+  <div class="auth-container">
+    <div class="auth-card">
+      <h2>Welcome back</h2>
+      <form id="loginForm">
+        <div class="input-group">
+          <label>Email</label>
+          <input type="email" id="email" required>
+        </div>
+        <div class="input-group">
+          <label>Password</label>
+          <input type="password" id="password" required>
+        </div>
+        <button type="submit" class="btn-primary">Log in</button>
+      </form>
+      <p>Don't have an account? <a href="signup.html">Sign up</a></p>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container footer-content">
+      <div class="footer-logo">
+        <i class="fas fa-brain"></i> Smart<span>Tutor</span>
+        <p>Making learning personal, powerful, and fun.</p>
+      </div>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="contact.html">Contact</a>
+      </div>
+      <div class="footer-social">
+        <a href="#"><i class="fab fa-twitter"></i></a>
+        <a href="#"><i class="fab fa-instagram"></i></a>
+        <a href="#"><i class="fab fa-linkedin"></i></a>
+      </div>
+    </div>
+    <div class="copyright">
+      <p>&copy; 2026 SmartTutor. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="js/auth.js"></script>
 </body>
 </html>
