@@ -5,6 +5,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     await requireAuth();
   }
 
+  // XP display update function
+  async function updateXpDisplay() {
+    try {
+      const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
+      const res = await fetch('/api/user-stats', { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        const xpDiv = document.getElementById('xpSummary');
+        const xpTotalSpan = document.getElementById('xpTotal');
+        const xpFill = document.getElementById('xpFill');
+        if (xpDiv && xpTotalSpan && xpFill) {
+          const maxXp = 10000; // Adjust this as needed
+          const percent = Math.min(100, (data.totalXp / maxXp) * 100);
+          xpTotalSpan.textContent = data.totalXp;
+          xpFill.style.width = `${percent}%`;
+          xpDiv.classList.remove('hidden');
+        }
+      } else {
+        console.warn('Failed to fetch XP stats');
+      }
+    } catch (err) {
+      console.error('Error updating XP display:', err);
+    }
+  }
+
+  // Call XP display after login
+  await updateXpDisplay();
+
   const generateBtn = document.getElementById('generateBtn');
   const clearBtn = document.getElementById('clearBtn');
   const questionsPanel = document.getElementById('questionsPanel');
@@ -12,9 +40,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const placeholderMessage = document.getElementById('placeholderMessage');
   const loadingDiv = document.getElementById('loading');
   const submitAnswersBtn = document.getElementById('submitAnswersBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
-
-  if (logoutBtn) logoutBtn.addEventListener('click', () => logout());
 
   let currentQuestions = [];
   let questionIds = []; // DB IDs from the server
@@ -185,6 +210,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           feedbackDiv.classList.remove('hidden');
         }
       });
+
+      // After marking, refresh XP display
+      await updateXpDisplay();
+
     } catch (err) {
       console.error(err);
       alert('Error marking answers: ' + err.message);
