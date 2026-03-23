@@ -1,9 +1,8 @@
 // api/generate-questions.js
-const { extractJSON } = require('../utils/ai'); // we'll keep the utility
+import { extractJSON } from '../utils/ai.js';
+import { supabase } from '../utils/supabase.js';
 
-// Simple in‑memory rate limiter (optional – remove if you don't want it)
 const rateLimits = new Map();
-
 function checkRateLimit(ip, limit = 10, windowMs = 60000) {
   const now = Date.now();
   const record = rateLimits.get(ip);
@@ -16,12 +15,21 @@ function checkRateLimit(ip, limit = 10, windowMs = 60000) {
   return true;
 }
 
+// Extract user from Supabase JWT in Authorization header
+async function getUserFromRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Optional: rate limit by IP
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (!checkRateLimit(clientIp, 10, 60000)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
@@ -29,7 +37,6 @@ export default async function handler(req, res) {
 
   const { subject, topic, level, difficulty, numQuestions } = req.body;
 
-  // Input validation
   if (!subject || !topic) {
     return res.status(400).json({ error: 'Missing required fields: subject and topic' });
   }
@@ -55,7 +62,7 @@ Return the questions as a JSON array of strings. For example: ["Question 1", "Qu
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant that generates questions. Follow instructions strictly.' },
+          { role: 'system', content: 'You are a helpful assistant that generates exam questions. Follow instructions strictly.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
@@ -67,18 +74,33 @@ Return the questions as a JSON array of strings. For example: ["Question 1", "Qu
     if (!response.ok) throw new Error(data.error?.message || 'Failed to generate questions');
     if (!data.choices?.[0]?.message) throw new Error('Invalid AI response');
 
-    const aiContent = data.choices[0].message.content;
-    let questions;
-    try {
-      questions = extractJSON(aiContent);
-    } catch (e) {
-      console.error('JSON extraction failed:', aiContent);
-      throw new Error('AI response was not valid JSON');
-    }
+    let questions = extractJSON(data.choices[0].message.content);
     if (!Array.isArray(questions)) throw new Error('AI response is not an array');
-
     if (questions.length > num) questions = questions.slice(0, num);
-    res.status(200).json({ questions });
+
+    // Save session + questions to DB if user is logged in
+    const user = await getUserFromRequest(req);
+    let sessionId = null;
+
+    if (user) {
+      const { data: session, error: sessionError } = await supabase
+        .from('sessions')
+        .insert({ user_id: user.id, subject, topic, level, difficulty: diff })
+        .select('id')
+        .single();
+
+      if (!sessionError && session) {
+        sessionId = session.id;
+        const questionRows = questions.map(q => ({
+          session_id: sessionId,
+          question_text: q,
+          is_custom: false
+        }));
+        await supabase.from('questions').insert(questionRows);
+      }
+    }
+
+    res.status(200).json({ questions, sessionId });
   } catch (error) {
     console.error('Error in generate-questions:', error);
     res.status(500).json({ error: 'Failed to generate questions', details: error.message });
