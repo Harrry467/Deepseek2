@@ -1,5 +1,6 @@
 // api/mark.js
-const { extractJSON } = require('../utils/ai');
+import { extractJSON } from '../utils/ai.js';
+import { supabase } from '../utils/supabase.js';
 
 const rateLimits = new Map();
 function checkRateLimit(ip, limit = 15, windowMs = 60000) {
@@ -14,6 +15,15 @@ function checkRateLimit(ip, limit = 15, windowMs = 60000) {
   return true;
 }
 
+async function getUserFromRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -24,7 +34,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
 
-  const { question, userAnswer, modelAnswerHint } = req.body;
+  const { question, userAnswer, modelAnswerHint, questionId } = req.body;
   if (!question || !userAnswer) {
     return res.status(400).json({ error: 'Missing required fields: question and userAnswer' });
   }
@@ -64,17 +74,22 @@ Return the result in JSON format exactly like this:
     if (!response.ok) throw new Error(data.error?.message || 'AI marking failed');
     if (!data.choices?.[0]?.message) throw new Error('Invalid AI response');
 
-    const aiContent = data.choices[0].message.content;
-    let result;
-    try {
-      result = extractJSON(aiContent);
-    } catch (e) {
-      console.error('JSON extraction failed:', aiContent);
-      throw new Error('AI response was not valid JSON');
-    }
-
+    const result = extractJSON(data.choices[0].message.content);
     if (typeof result.score !== 'number' || !Array.isArray(result.strengths) || !Array.isArray(result.improvements)) {
       throw new Error('AI response missing required fields');
+    }
+
+    // Save answer to DB if user is logged in and questionId was provided
+    const user = await getUserFromRequest(req);
+    if (user && questionId) {
+      await supabase.from('answers').insert({
+        question_id: questionId,
+        user_id: user.id,
+        answer_text: userAnswer,
+        score: result.score,
+        strengths: result.strengths,
+        improvements: result.improvements
+      });
     }
 
     res.status(200).json(result);
