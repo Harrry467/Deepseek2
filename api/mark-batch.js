@@ -1,5 +1,6 @@
 // api/mark-batch.js
-const { extractJSON } = require('../utils/ai');
+import { extractJSON } from '../utils/ai.js';
+import { supabase } from '../utils/supabase.js';
 
 const rateLimits = new Map();
 function checkRateLimit(ip, limit = 5, windowMs = 60000) {
@@ -14,6 +15,15 @@ function checkRateLimit(ip, limit = 5, windowMs = 60000) {
   return true;
 }
 
+async function getUserFromRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -24,7 +34,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
 
-  const { questions, answers } = req.body;
+  const { questions, answers, questionIds, sessionId } = req.body;
   if (!Array.isArray(questions) || !Array.isArray(answers) || questions.length !== answers.length) {
     return res.status(400).json({ error: 'Invalid input: questions and answers arrays must match' });
   }
@@ -63,22 +73,27 @@ Output only the JSON array, no other text.`;
     if (!response.ok) throw new Error(data.error?.message || 'Batch marking failed');
     if (!data.choices?.[0]?.message) throw new Error('Invalid AI response');
 
-    const aiContent = data.choices[0].message.content;
-    let results;
-    try {
-      results = extractJSON(aiContent);
-    } catch (e) {
-      console.error('JSON extraction failed:', aiContent);
-      throw new Error('AI response was not valid JSON');
-    }
+    let results = extractJSON(data.choices[0].message.content);
     if (!Array.isArray(results)) throw new Error('AI response is not an array');
 
     // Pad or truncate to match questions length
-    if (results.length !== questions.length) {
-      while (results.length < questions.length) {
-        results.push({ score: 0, strengths: ['No feedback available'], improvements: ['Try again'] });
-      }
-      if (results.length > questions.length) results = results.slice(0, questions.length);
+    while (results.length < questions.length) {
+      results.push({ score: 0, strengths: ['No feedback available'], improvements: ['Try again'] });
+    }
+    if (results.length > questions.length) results = results.slice(0, questions.length);
+
+    // Save all answers to DB if user is logged in
+    const user = await getUserFromRequest(req);
+    if (user && Array.isArray(questionIds) && questionIds.length === questions.length) {
+      const answerRows = results.map((result, i) => ({
+        question_id: questionIds[i],
+        user_id: user.id,
+        answer_text: answers[i],
+        score: result.score,
+        strengths: result.strengths,
+        improvements: result.improvements
+      }));
+      await supabase.from('answers').insert(answerRows);
     }
 
     res.status(200).json(results);
