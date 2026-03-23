@@ -11,27 +11,6 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, { delimiters: [ {left: '$$', right: '$$', display: true}, {left: '\\(', right: '\\)', display: false} ] });"></script>
-  <style>
-    /* Additional styles for profile icon */
-    .profile-icon {
-      margin-left: 1rem;
-      cursor: pointer;
-      font-size: 1.5rem;
-      color: var(--primary);
-    }
-    .avatar {
-      width: 32px;
-      height: 32px;
-      background: var(--primary);
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 1rem;
-    }
-  </style>
 </head>
 <body>
 
@@ -45,10 +24,7 @@
         <a href="#features">Features</a>
         <a href="pricing.html">Pricing</a>
         <a href="dashboard.html" class="btn-primary-small">Start Learning</a>
-        <!-- Profile Icon (replaces login button) -->
-        <div id="profileIcon" class="profile-icon">
-          <i class="fas fa-user-circle"></i>
-        </div>
+        <a href="login.html" class="btn-outline-small">Login</a>
       </div>
     </div>
   </nav>
@@ -68,7 +44,7 @@
         </div>
       </div>
       <div class="hero-image">
-        <img src="https://placeholder.co/600x400/e2e8f0/1e293b?text=Interactive+Learning" alt="Tutoring illustration">
+        <img src="https://picsum.photos/id/20/600/400" alt="Interactive learning illustration">
       </div>
     </div>
   </section>
@@ -136,27 +112,5 @@
       <p>&copy; 2026 SmartTutor. All rights reserved.</p>
     </div>
   </footer>
-
-  <script>
-    // Profile icon logic
-    const user = JSON.parse(localStorage.getItem('smarttutor_user'));
-    const profileIcon = document.getElementById('profileIcon');
-    if (user && user.email) {
-      // Show avatar with first letter of name or email
-      const initial = (user.name ? user.name[0] : user.email[0]).toUpperCase();
-      profileIcon.innerHTML = `<div class="avatar">${initial}</div>`;
-      profileIcon.style.cursor = 'pointer';
-      profileIcon.addEventListener('click', () => {
-        window.location.href = 'dashboard.html'; // go to dashboard
-      });
-    } else {
-      // Not logged in – show default icon that links to login
-      profileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
-      profileIcon.style.cursor = 'pointer';
-      profileIcon.addEventListener('click', () => {
-        window.location.href = 'login.html';
-      });
-    }
-  </script>
 </body>
 </html>
