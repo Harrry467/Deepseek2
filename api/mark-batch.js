@@ -1,36 +1,38 @@
 // api/mark-batch.js
-const { extractJSON, checkRateLimit } = require('../utils/ai');
+const { extractJSON } = require('../utils/ai');
+
+const rateLimits = new Map();
+function checkRateLimit(ip, limit = 5, windowMs = 60000) {
+  const now = Date.now();
+  const record = rateLimits.get(ip);
+  if (!record || now > record.resetTime) {
+    rateLimits.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (record.count >= limit) return false;
+  record.count++;
+  return true;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Authentication
-  const userEmail = req.headers['x-user-email'];
-  if (!userEmail) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  // Rate limiting (per user)
-  if (!checkRateLimit(userEmail, 5, 60000)) { // 5 batch requests per minute
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  if (!checkRateLimit(clientIp, 5, 60000)) {
     return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
   }
 
   const { questions, answers } = req.body;
-
   if (!Array.isArray(questions) || !Array.isArray(answers) || questions.length !== answers.length) {
     return res.status(400).json({ error: 'Invalid input: questions and answers arrays must match' });
   }
-
-  // Limit batch size
   if (questions.length > 10) {
     return res.status(400).json({ error: 'Maximum 10 questions per batch' });
   }
 
-  // Build prompt with clear formatting instructions
   const qaPairs = questions.map((q, i) => `Q${i+1}: ${q}\nA${i+1}: ${answers[i]}`).join('\n\n');
-
   const prompt = `You are an AI tutor. Mark the following student answers. For each question, provide a score out of 10, three strengths, and three areas to improve.
 Return the results as a JSON array of objects, each with keys: score (number), strengths (array of strings), improvements (array of strings).
 
@@ -58,18 +60,10 @@ Output only the JSON array, no other text.`;
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-      console.error('DeepSeek API error:', data);
-      throw new Error(data.error?.message || 'Batch marking failed');
-    }
-
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response structure from AI');
-    }
+    if (!response.ok) throw new Error(data.error?.message || 'Batch marking failed');
+    if (!data.choices?.[0]?.message) throw new Error('Invalid AI response');
 
     const aiContent = data.choices[0].message.content;
-
     let results;
     try {
       results = extractJSON(aiContent);
@@ -77,10 +71,7 @@ Output only the JSON array, no other text.`;
       console.error('JSON extraction failed:', aiContent);
       throw new Error('AI response was not valid JSON');
     }
-
-    if (!Array.isArray(results)) {
-      throw new Error('AI response is not an array');
-    }
+    if (!Array.isArray(results)) throw new Error('AI response is not an array');
 
     // Pad or truncate to match questions length
     if (results.length !== questions.length) {
