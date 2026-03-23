@@ -1,17 +1,27 @@
 // api/generate-questions.js
-import { extractJSON } from '../utils/ai.js'; // if you have this utility; if not, we'll include the function inline
 
-// If you don't have utils/ai.js yet, just copy the extractJSON function here
+// Helper to extract JSON from AI responses (robust version)
 function extractJSON(text) {
+  // Try direct parse first
   try {
     return JSON.parse(text);
   } catch (e) {
+    // If that fails, try to find the first '[' or '{' and last ']' or '}'
     const start = text.indexOf('[');
     const end = text.lastIndexOf(']') + 1;
     if (start !== -1 && end > start) {
       return JSON.parse(text.substring(start, end));
     }
-    throw new Error('Could not extract JSON from AI response');
+    // Maybe it's an object with a "questions" array?
+    const objStart = text.indexOf('{');
+    const objEnd = text.lastIndexOf('}') + 1;
+    if (objStart !== -1 && objEnd > objStart) {
+      const obj = JSON.parse(text.substring(objStart, objEnd));
+      if (obj.questions && Array.isArray(obj.questions)) {
+        return obj.questions;
+      }
+    }
+    throw new Error('Could not extract JSON array from AI response');
   }
 }
 
@@ -35,7 +45,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'difficulty must be between 1 and 10' });
   }
 
-  // Strict prompt: force JSON output only
+  // Strict prompt – force JSON output
   const prompt = `Generate exactly ${num} practice questions for ${subject} on the topic of ${topic} at ${level} level with difficulty ${diff}/10.
 Return the questions as a JSON array of strings. For example: ["Question 1", "Question 2", ...].
 Rules:
@@ -92,7 +102,7 @@ Rules:
     }
 
     const aiContent = data.choices[0].message.content;
-    console.log('AI raw output:', aiContent); // optional debug
+    console.log('AI raw output:', aiContent); // Optional: for debugging
 
     let questions;
     try {
@@ -111,6 +121,7 @@ Rules:
       questions = questions.slice(0, num);
     }
 
+    // Return the array directly, wrapped in an object
     res.status(200).json({ questions });
   } catch (error) {
     console.error('Error in generate-questions:', error);
