@@ -1,7 +1,10 @@
 // js/auth.js
 // Supabase publishable key is safe to use in browser JS
 const SUPABASE_URL = 'https://qshqulmdhuwtcedrdrxq.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = window.__ENV__?.SUPABASE_PUBLISHABLE_KEY || '';
+
+// ⚠️ IMPORTANT: Replace the value below with your actual Supabase anon/public key.
+// Find it in your Supabase dashboard → Settings → API → "anon / public" key.
+const SUPABASE_PUBLISHABLE_KEY = window.__ENV__?.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_J52S-25wcCbOUFZ9MkiLeQ_MVMnZIQl';
 
 // Load Supabase from CDN
 async function getSupabase() {
@@ -21,9 +24,14 @@ async function getAuthHeader() {
 
 // Get current user object
 async function getCurrentUser() {
-  const sb = await getSupabase();
-  const { data: { user } } = await sb.auth.getUser();
-  return user;
+  try {
+    const sb = await getSupabase();
+    const { data: { user } } = await sb.auth.getUser();
+    return user;
+  } catch (err) {
+    console.error('getCurrentUser error:', err);
+    return null;
+  }
 }
 
 // Logout
@@ -100,8 +108,8 @@ document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
       else alert(error.message);
       return;
     }
-    // Supabase sends a confirmation email by default
-    // For instant access, you can disable email confirmation in Supabase Auth settings
+    // Supabase sends a confirmation email by default.
+    // For instant access, disable email confirmation in Supabase Auth settings.
     window.location.href = 'dashboard.html';
   } catch (err) {
     if (errorEl) errorEl.textContent = 'Sign up failed. Please try again.';
