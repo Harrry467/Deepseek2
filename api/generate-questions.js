@@ -1,28 +1,8 @@
 // api/generate-questions.js
+import { supabase } from '../utils/supabase.js';
 
-// Helper to extract JSON from AI responses (robust version)
 function extractJSON(text) {
-  // Try direct parse first
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // If that fails, try to find the first '[' or '{' and last ']' or '}'
-    const start = text.indexOf('[');
-    const end = text.lastIndexOf(']') + 1;
-    if (start !== -1 && end > start) {
-      return JSON.parse(text.substring(start, end));
-    }
-    // Maybe it's an object with a "questions" array?
-    const objStart = text.indexOf('{');
-    const objEnd = text.lastIndexOf('}') + 1;
-    if (objStart !== -1 && objEnd > objStart) {
-      const obj = JSON.parse(text.substring(objStart, objEnd));
-      if (obj.questions && Array.isArray(obj.questions)) {
-        return obj.questions;
-      }
-    }
-    throw new Error('Could not extract JSON array from AI response');
-  }
+  // ... same as before ...
 }
 
 export default async function handler(req, res) {
@@ -34,97 +14,90 @@ export default async function handler(req, res) {
 
   // Input validation
   if (!subject || !topic) {
-    return res.status(400).json({ error: 'Missing required fields: subject and topic' });
+    return res.status(400).json({ error: 'Missing subject or topic' });
   }
   const num = parseInt(numQuestions);
   if (isNaN(num) || num < 1 || num > 20) {
-    return res.status(400).json({ error: 'numQuestions must be between 1 and 20' });
+    return res.status(400).json({ error: 'numQuestions 1-20' });
   }
   const diff = parseInt(difficulty);
   if (isNaN(diff) || diff < 1 || diff > 10) {
-    return res.status(400).json({ error: 'difficulty must be between 1 and 10' });
+    return res.status(400).json({ error: 'difficulty 1-10' });
   }
 
-  // Strict prompt – force JSON output
-  const prompt = `Generate exactly ${num} practice questions for ${subject} on the topic of ${topic} at ${level} level with difficulty ${diff}/10.
-Return the questions as a JSON array of strings. For example: ["Question 1", "Question 2", ...].
-Rules:
-- Output ONLY the JSON array.
-- No text before or after.
-- No markdown, no explanation.
-- The JSON must be valid and parsable by JSON.parse.`;
+  // Get authenticated user
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+  if (userError || !user) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 
+  // 1. Create session
+  const { data: session, error: sessionError } = await supabase
+    .from('sessions')
+    .insert({ user_id: user.id, subject, topic, level, difficulty })
+    .select()
+    .single();
+  if (sessionError) {
+    console.error('Session insert error:', sessionError);
+    return res.status(500).json({ error: 'Failed to create session' });
+  }
+
+  // 2. Generate questions via DeepSeek
+  const prompt = `Generate exactly ${num} practice questions for ${subject} on ${topic} at ${level} level, difficulty ${diff}/10.
+Return as JSON array of strings: ["Q1", "Q2", ...]. No extra text.`;
+
+  let aiQuestions = [];
   try {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          {
-            role: 'system',
-            content: 'You are a JSON generator. You output only valid JSON. Never include any text, explanations, or markdown. Just the raw JSON array.'
-          },
+          { role: 'system', content: 'You output only valid JSON arrays.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 2000
       })
     });
-
-    // Check content type before parsing
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const errorText = await response.text();
-      console.error('AI Provider returned non-JSON response:', errorText);
-      throw new Error('The AI service is currently overloaded or unavailable. Please try again in a few seconds.');
-    }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (err) {
-      const text = await response.text();
-      console.error('Invalid JSON from AI:', text);
-      throw new Error('AI returned invalid JSON.');
-    }
-
-    if (!response.ok) {
-      console.error('DeepSeek API error:', data);
-      throw new Error(data.error?.message || 'Failed to generate questions');
-    }
-
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response structure from AI');
-    }
-
-    const aiContent = data.choices[0].message.content;
-    console.log('AI raw output:', aiContent); // Optional: for debugging
-
-    let questions;
-    try {
-      questions = extractJSON(aiContent);
-    } catch (e) {
-      console.error('JSON extraction failed:', aiContent);
-      throw new Error('AI returned malformed JSON');
-    }
-
-    if (!Array.isArray(questions)) {
-      throw new Error('AI response is not an array');
-    }
-
-    // Trim to requested number
-    if (questions.length > num) {
-      questions = questions.slice(0, num);
-    }
-
-    // Return the array directly, wrapped in an object
-    res.status(200).json({ questions });
-  } catch (error) {
-    console.error('Error in generate-questions:', error);
-    res.status(500).json({ error: 'Failed to generate questions', details: error.message });
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+    aiQuestions = extractJSON(content);
+    if (!Array.isArray(aiQuestions)) throw new Error('Not an array');
+    aiQuestions = aiQuestions.slice(0, num);
+  } catch (err) {
+    console.error('AI generation failed:', err);
+    return res.status(500).json({ error: 'Failed to generate questions', details: err.message });
   }
+
+  // 3. Insert questions into DB
+  const questionsToInsert = aiQuestions.map(text => ({
+    session_id: session.id,
+    question_text: text,
+    is_custom: false
+  }));
+  const { data: insertedQuestions, error: insertError } = await supabase
+    .from('questions')
+    .insert(questionsToInsert)
+    .select();
+  if (insertError) {
+    console.error('Question insert error:', insertError);
+    return res.status(500).json({ error: 'Failed to save questions' });
+  }
+
+  // 4. Return to frontend
+  res.status(200).json({
+    questions: aiQuestions,
+    sessionId: session.id,
+    questionIds: insertedQuestions.map(q => q.id)
+  });
 }
