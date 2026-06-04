@@ -4,7 +4,7 @@ const SUPABASE_URL = 'https://qshqulmdhuwtcedrdrxq.supabase.co';
 
 // ⚠️ IMPORTANT: Replace the value below with your actual Supabase anon/public key.
 // Find it in your Supabase dashboard → Settings → API → "anon / public" key.
-const SUPABASE_PUBLISHABLE_KEY = window.__ENV__?.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_J52S-25wcCbOUFZ9MkiLeQ_MVMnZIQl';
+const SUPABASE_PUBLISHABLE_KEY = window.__ENV__?.SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHF1bG1kaHV3dGNlZHJkcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODEwMTMsImV4cCI6MjA4OTg1NzAxM30.UY7zcNwa1xmAhiQk2i8kFAPVyq7lG2B4TzM41eCG8s0';
 
 // Load Supabase from CDN
 async function getSupabase() {
