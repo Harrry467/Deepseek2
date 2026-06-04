@@ -1,21 +1,50 @@
-<footer>
-  <div class="container footer-content">
-    <div class="footer-logo">
-      <i class="fas fa-brain"></i> Smart<span>Tutor</span>
-      <p>Making learning personal, powerful, and fun.</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing | SmartTutor</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    .pricing-grid {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      padding: 2rem;
+    }
+    .pricing-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 2rem;
+      width: 300px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .price {
+      font-size: 2rem;
+      font-weight: bold;
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">...</nav>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <h3>Free</h3>
+      <div class="price">$0</div>
+      <p>5 questions per day</p>
+      <a href="dashboard.html" class="btn-primary">Get Started</a>
     </div>
-    <div class="footer-links">
-      <a href="privacy.html">Privacy Policy</a>
-      <a href="terms.html">Terms of Service</a>
-      <a href="contact.html">Contact</a>
-    </div>
-    <div class="footer-social">
-      <a href="#"><i class="fab fa-twitter"></i></a>
-      <a href="#"><i class="fab fa-instagram"></i></a>
-      <a href="#"><i class="fab fa-linkedin"></i></a>
+    <div class="pricing-card">
+      <h3>Pro</h3>
+      <div class="price">$9.99<span>/mo</span></div>
+      <p>Unlimited questions & history</p>
+      <a href="signup.html" class="btn-primary">Subscribe</a>
     </div>
   </div>
-  <div class="copyright">
-    <p>&copy; 2026 SmartTutor. All rights reserved.</p>
-  </div>
-</footer>
+  <footer>...</footer>
+</body>
+</html>
