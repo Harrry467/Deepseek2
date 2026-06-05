@@ -1,125 +1,245 @@
 // js/auth.js
-// Supabase publishable key is safe to use in browser JS
+
 const SUPABASE_URL = 'https://qshqulmdhuwtcedrdrxq.supabase.co';
 
-// ⚠️ IMPORTANT: Replace the value below with your actual Supabase anon/public key.
-// Find it in your Supabase dashboard → Settings → API → "anon / public" key.
-const SUPABASE_PUBLISHABLE_KEY = window.__ENV__?.SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHF1bG1kaHV3dGNlZHJkcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODEwMTMsImV4cCI6MjA4OTg1NzAxM30.UY7zcNwa1xmAhiQk2i8kFAPVyq7lG2B4TzM41eCG8s0';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHF1bG1kaHV3dGNlZHJkcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODEwMTMsImV4cCI6MjA4OTg1NzAxM30.UY7zcNwa1xmAhiQk2i8kFAPVyq7lG2B4TzM41eCG8s0';
 
-// Load Supabase from CDN
-async function getSupabase() {
-  if (window._supabase) return window._supabase;
-  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-  window._supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-  return window._supabase;
+let supabase = null;
+
+// Initialise Supabase safely
+async function initSupabase() {
+  if (supabase) return supabase;
+
+  try {
+    const { createClient } = await import(
+      'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+    );
+
+    supabase = createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
+        }
+      }
+    );
+
+    return supabase;
+  } catch (err) {
+    console.error('Failed to initialise Supabase:', err);
+    alert('Authentication failed to load.');
+    throw err;
+  }
 }
 
-// Get current session token for API calls
+// Get auth token for API requests
 async function getAuthHeader() {
-  const sb = await getSupabase();
-  const { data: { session } } = await sb.auth.getSession();
+  const sb = await initSupabase();
+  const {
+    data: { session }
+  } = await sb.auth.getSession();
+
   if (!session) return {};
-  return { 'Authorization': `Bearer ${session.access_token}` };
+
+  return {
+    Authorization: `Bearer ${session.access_token}`
+  };
 }
 
-// Get current user object
+// Get current logged in user
 async function getCurrentUser() {
   try {
-    const sb = await getSupabase();
-    const { data: { user } } = await sb.auth.getUser();
-    return user;
+    const sb = await initSupabase();
+
+    const {
+      data: { user }
+    } = await sb.auth.getUser();
+
+    return user || null;
   } catch (err) {
-    console.error('getCurrentUser error:', err);
+    console.error('Get user error:', err);
     return null;
   }
 }
 
-// Logout
-async function logout() {
-  const sb = await getSupabase();
-  await sb.auth.signOut();
-  window.location.href = 'index.html';
-}
-
-// Redirect to dashboard if already logged in
+// Redirect if user already logged in
 async function redirectIfLoggedIn() {
   const user = await getCurrentUser();
-  if (user) window.location.href = 'dashboard.html';
+
+  if (user) {
+    window.location.href = 'dashboard.html';
+  }
 }
 
-// Redirect to login if not logged in
+// Protect dashboard pages
 async function requireAuth() {
   const user = await getCurrentUser();
-  if (!user) window.location.href = 'login.html';
+
+  if (!user) {
+    window.location.href = 'login.html';
+    return null;
+  }
+
   return user;
 }
 
-// Login form handler
-document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  const errorEl = document.getElementById('authError');
-
+// Logout
+async function logout() {
   try {
-    const sb = await getSupabase();
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (errorEl) errorEl.textContent = error.message;
-      else alert(error.message);
-      return;
-    }
-    window.location.href = 'dashboard.html';
+    const sb = await initSupabase();
+    await sb.auth.signOut();
   } catch (err) {
-    if (errorEl) errorEl.textContent = 'Login failed. Please try again.';
-    else alert('Login failed. Please try again.');
-  }
-});
-
-// Signup form handler
-document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = document.getElementById('name').value;
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  const confirm = document.getElementById('confirmPassword').value;
-  const errorEl = document.getElementById('authError');
-
-  if (password !== confirm) {
-    if (errorEl) errorEl.textContent = 'Passwords do not match';
-    else alert('Passwords do not match');
-    return;
-  }
-  if (password.length < 6) {
-    if (errorEl) errorEl.textContent = 'Password must be at least 6 characters';
-    else alert('Password must be at least 6 characters');
-    return;
+    console.error('Logout failed:', err);
   }
 
-  try {
-    const sb = await getSupabase();
-    const { error } = await sb.auth.signUp({
-      email,
-      password,
-      options: { data: { name } }
+  window.location.href = 'index.html';
+}
+
+// Login handler
+document.addEventListener('DOMContentLoaded', () => {
+  const loginForm = document.getElementById('loginForm');
+
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email =
+        document.getElementById('email')?.value?.trim();
+
+      const password =
+        document.getElementById('password')?.value;
+
+      const errorEl =
+        document.getElementById('authError');
+
+      if (errorEl) errorEl.textContent = '';
+
+      try {
+        const sb = await initSupabase();
+
+        const { error } =
+          await sb.auth.signInWithPassword({
+            email,
+            password
+          });
+
+        if (error) {
+          console.error(error);
+
+          if (errorEl) {
+            errorEl.textContent = error.message;
+          } else {
+            alert(error.message);
+          }
+
+          return;
+        }
+
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        console.error(err);
+
+        if (errorEl) {
+          errorEl.textContent =
+            'Login failed. Please try again.';
+        } else {
+          alert('Login failed.');
+        }
+      }
     });
-    if (error) {
-      if (errorEl) errorEl.textContent = error.message;
-      else alert(error.message);
-      return;
-    }
-    // Supabase sends a confirmation email by default.
-    // For instant access, disable email confirmation in Supabase Auth settings.
-    window.location.href = 'dashboard.html';
-  } catch (err) {
-    if (errorEl) errorEl.textContent = 'Sign up failed. Please try again.';
-    else alert('Sign up failed. Please try again.');
+  }
+
+  // Signup handler
+  const signupForm =
+    document.getElementById('signupForm');
+
+  if (signupForm) {
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name =
+        document.getElementById('name')?.value?.trim();
+
+      const email =
+        document.getElementById('email')?.value?.trim();
+
+      const password =
+        document.getElementById('password')?.value;
+
+      const confirmPassword =
+        document.getElementById(
+          'confirmPassword'
+        )?.value;
+
+      const errorEl =
+        document.getElementById('authError');
+
+      if (errorEl) errorEl.textContent = '';
+
+      // Validation
+      if (password !== confirmPassword) {
+        errorEl.textContent =
+          'Passwords do not match';
+        return;
+      }
+
+      if (password.length < 6) {
+        errorEl.textContent =
+          'Password must be at least 6 characters';
+        return;
+      }
+
+      try {
+        const sb = await initSupabase();
+
+        const { error } =
+          await sb.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: name
+              }
+            }
+          });
+
+        if (error) {
+          console.error(error);
+
+          if (errorEl) {
+            errorEl.textContent =
+              error.message;
+          } else {
+            alert(error.message);
+          }
+
+          return;
+        }
+
+        // Auto redirect after signup
+        window.location.href =
+          'dashboard.html';
+      } catch (err) {
+        console.error(err);
+
+        if (errorEl) {
+          errorEl.textContent =
+            'Sign up failed. Please try again.';
+        } else {
+          alert('Sign up failed.');
+        }
+      }
+    });
   }
 });
 
-// Expose helpers globally for use in other scripts
+// Make globally available
 window.getAuthHeader = getAuthHeader;
 window.getCurrentUser = getCurrentUser;
-window.logout = logout;
 window.requireAuth = requireAuth;
 window.redirectIfLoggedIn = redirectIfLoggedIn;
+window.logout = logout;
