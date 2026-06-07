@@ -1,0 +1,763 @@
+<!-- explain-practice.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explain & Practice | SmartTutor</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    .page-container {
+      max-width: 860px;
+      margin: 2rem auto;
+      padding: 0 1.5rem 4rem;
+    }
+
+    .page-header {
+      margin-bottom: 2rem;
+    }
+
+    .page-header h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 0.4rem;
+    }
+
+    .page-header p {
+      color: #64748b;
+      font-size: 1rem;
+    }
+
+    /* Ask panel */
+    .ask-panel {
+      background: white;
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      margin-bottom: 2rem;
+    }
+
+    .ask-panel h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .ask-panel h2 i {
+      color: #8b5cf6;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .input-row textarea {
+      flex: 1;
+      padding: 0.85rem 1rem;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 0.85rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      resize: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      line-height: 1.5;
+      min-height: 70px;
+    }
+
+    .input-row textarea:focus {
+      outline: none;
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139,92,246,0.12);
+    }
+
+    .btn-ask {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      border: none;
+      padding: 0.85rem 1.5rem;
+      border-radius: 0.85rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      height: 70px;
+    }
+
+    .btn-ask:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(59,130,246,0.35);
+    }
+
+    .btn-ask:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Explanation panel */
+    .explanation-panel {
+      background: linear-gradient(135deg, #f0f9ff, #eef2ff);
+      border: 1.5px solid #bfdbfe;
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      margin-bottom: 2rem;
+      display: none;
+    }
+
+    .explanation-panel.show { display: block; }
+
+    .explanation-panel h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1e40af;
+      margin-bottom: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .explanation-text {
+      color: #1e293b;
+      line-height: 1.75;
+      font-size: 0.97rem;
+      white-space: pre-wrap;
+    }
+
+    .start-practice-btn {
+      margin-top: 1.25rem;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.85rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .start-practice-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(59,130,246,0.35);
+    }
+
+    /* Practice section */
+    .practice-section {
+      display: none;
+    }
+
+    .practice-section.show { display: block; }
+
+    .practice-section h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .question-card {
+      background: white;
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+      border-left: 5px solid #e2e8f0;
+      transition: border-color 0.3s;
+    }
+
+    .question-card.q1 { border-left-color: #22c55e; }
+    .question-card.q2 { border-left-color: #f59e0b; }
+    .question-card.q3 { border-left-color: #ef4444; }
+
+    .question-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .q-badge {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .q1 .q-badge { background: #dcfce7; color: #16a34a; }
+    .q2 .q-badge { background: #fef3c7; color: #d97706; }
+    .q3 .q-badge { background: #fee2e2; color: #dc2626; }
+
+    .q-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+    }
+
+    .question-text {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #0f172a;
+      margin-bottom: 1rem;
+      line-height: 1.55;
+    }
+
+    /* Hint pill */
+    .hint-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 2rem;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.82rem;
+      color: #475569;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .hint-pill:hover { background: #e2e8f0; }
+    .hint-pill i { font-size: 0.85rem; color: #8b5cf6; }
+
+    .hint-text {
+      background: #faf5ff;
+      border: 1px solid #e9d5ff;
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+      font-size: 0.88rem;
+      color: #6d28d9;
+      margin-bottom: 1rem;
+      display: none;
+      line-height: 1.55;
+    }
+
+    .hint-text.show { display: block; }
+
+    .answer-textarea {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 0.75rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 0.75rem;
+    }
+
+    .answer-textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+
+    .submit-q-btn {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.25rem;
+      border-radius: 0.75rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .submit-q-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 14px rgba(59,130,246,0.3);
+    }
+
+    .submit-q-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* Feedback box */
+    .feedback-box {
+      margin-top: 1rem;
+      border-radius: 0.9rem;
+      padding: 1.1rem 1.25rem;
+      display: none;
+      animation: fadeSlideIn 0.35s ease;
+    }
+
+    .feedback-box.show { display: block; }
+
+    @keyframes fadeSlideIn {
+      from { opacity:0; transform: translateY(8px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+
+    .feedback-box.pass {
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+    }
+
+    .feedback-box.fail {
+      background: #fff7ed;
+      border: 1.5px solid #fdba74;
+    }
+
+    .feedback-score {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+
+    .feedback-box.pass .feedback-score { color: #16a34a; }
+    .feedback-box.fail .feedback-score { color: #ea580c; }
+
+    .feedback-section-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0.6rem 0 0.3rem;
+      color: #475569;
+    }
+
+    .feedback-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .feedback-list li {
+      font-size: 0.88rem;
+      color: #334155;
+      line-height: 1.5;
+      padding: 0.2rem 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+    }
+
+    .feedback-list li i { flex-shrink: 0; margin-top: 0.2rem; }
+
+    .feedback-list.strengths li i { color: #22c55e; }
+    .feedback-list.improvements li i { color: #f59e0b; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Loading skeletons */
+    .skeleton-line {
+      height: 0.9rem;
+      background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.3s infinite;
+      border-radius: 0.4rem;
+      margin-bottom: 0.6rem;
+    }
+
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .no-hint-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #fee2e2;
+      color: #dc2626;
+      padding: 0.35rem 0.85rem;
+      border-radius: 2rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container nav-container">
+      <div class="logo"><i class="fas fa-brain"></i> Smart<span>Tutor</span></div>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="explain-practice.html" class="active">Explain & Practice</a></li>
+        <li><a href="profile.html">My Profile</a></li>
+        <li><a href="#" class="btn-outline-small" id="loginLogoutBtn">Login</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="page-container">
+    <div class="page-header">
+      <h1><i class="fas fa-lightbulb" style="font-size:1.5rem;"></i> Explain & Practice</h1>
+      <p>Struggling with something? Tell us — we'll explain it clearly, then give you 3 practice questions to test your understanding.</p>
+    </div>
+
+    <!-- Ask panel -->
+    <div class="ask-panel">
+      <h2><i class="fas fa-question-circle"></i> What do you want to understand?</h2>
+      <div class="input-row">
+        <textarea id="topicInput" placeholder="e.g. I don't understand how photosynthesis works, or why does x² – 4 factorise differently to x² + 4?" rows="2"></textarea>
+        <button class="btn-ask" id="explainBtn">
+          <i class="fas fa-magic"></i> Explain it
+        </button>
+      </div>
+    </div>
+
+    <!-- Explanation panel -->
+    <div class="explanation-panel" id="explanationPanel">
+      <h3><i class="fas fa-book-open"></i> Here's your explanation</h3>
+      <div id="explanationContent" class="explanation-text"></div>
+      <button class="start-practice-btn" id="startPracticeBtn">
+        <i class="fas fa-dumbbell"></i> Start Practice Questions
+      </button>
+    </div>
+
+    <!-- Practice section -->
+    <div class="practice-section" id="practiceSection">
+      <h2><i class="fas fa-tasks"></i> Practice Questions</h2>
+
+      <!-- Q1: Big hint -->
+      <div class="question-card q1" id="qCard1">
+        <div class="question-card-header">
+          <div class="q-badge">1</div>
+          <div>
+            <div class="q-label">Question 1 — Big Hint</div>
+          </div>
+        </div>
+        <div id="qText1" class="question-text"></div>
+        <div class="hint-pill" id="hintToggle1" onclick="toggleHint(1)">
+          <i class="fas fa-lightbulb"></i> <span id="hintLabel1">Show hint</span>
+        </div>
+        <div class="hint-text" id="hintBox1"></div>
+        <textarea class="answer-textarea" id="answer1" placeholder="Write your answer here..."></textarea>
+        <button class="submit-q-btn" id="submitBtn1" onclick="submitAnswer(1)">
+          <i class="fas fa-check"></i> Mark my answer
+        </button>
+        <div class="feedback-box" id="feedback1"></div>
+      </div>
+
+      <!-- Q2: Medium hint -->
+      <div class="question-card q2" id="qCard2">
+        <div class="question-card-header">
+          <div class="q-badge">2</div>
+          <div>
+            <div class="q-label">Question 2 — Medium Hint</div>
+          </div>
+        </div>
+        <div id="qText2" class="question-text"></div>
+        <div class="hint-pill" id="hintToggle2" onclick="toggleHint(2)">
+          <i class="fas fa-lightbulb"></i> <span id="hintLabel2">Show hint</span>
+        </div>
+        <div class="hint-text" id="hintBox2"></div>
+        <textarea class="answer-textarea" id="answer2" placeholder="Write your answer here..."></textarea>
+        <button class="submit-q-btn" id="submitBtn2" onclick="submitAnswer(2)">
+          <i class="fas fa-check"></i> Mark my answer
+        </button>
+        <div class="feedback-box" id="feedback2"></div>
+      </div>
+
+      <!-- Q3: No hint -->
+      <div class="question-card q3" id="qCard3">
+        <div class="question-card-header">
+          <div class="q-badge">3</div>
+          <div>
+            <div class="q-label">Question 3 — No Hint</div>
+          </div>
+        </div>
+        <div id="qText3" class="question-text"></div>
+        <div class="no-hint-label">
+          <i class="fas fa-ban"></i> No hints — you've got this!
+        </div>
+        <textarea class="answer-textarea" id="answer3" placeholder="Write your answer here..."></textarea>
+        <button class="submit-q-btn" id="submitBtn3" onclick="submitAnswer(3)">
+          <i class="fas fa-check"></i> Mark my answer
+        </button>
+        <div class="feedback-box" id="feedback3"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container footer-content">
+      <div class="footer-logo">
+        <i class="fas fa-brain"></i> Smart<span>Tutor</span>
+        <p>Making learning personal, powerful, and fun.</p>
+      </div>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms of Service</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="copyright">
+      <p>&copy; 2026 SmartTutor. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="js/auth.js"></script>
+  <script>
+    const SUPABASE_URL = 'https://qshqulmdhuwtcedrdrxq.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHF1bG1kaHV3dGNlZHJkcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODEwMTMsImV4cCI6MjA4OTg1NzAxM30.UY7zcNwa1xmAhiQk2i8kFAPVyq7lG2B4TzM41eCG8s0';
+    const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+
+    // Stored practice data
+    let practiceData = null; // { questions: [{q, hint, modelAnswer}], explanation }
+    let hintVisible = [false, false, false];
+
+    // Nav login/logout
+    (async () => {
+      await requireAuth();
+      const loginBtn = document.getElementById('loginLogoutBtn');
+      const user = await getCurrentUser();
+      if (user) {
+        loginBtn.innerHTML = 'Logout';
+        loginBtn.href = '#';
+        loginBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await logout();
+        });
+      }
+    })();
+
+    // ── Explain button ──────────────────────────────────────────────
+    document.getElementById('explainBtn').addEventListener('click', async () => {
+      const topic = document.getElementById('topicInput').value.trim();
+      if (!topic) {
+        document.getElementById('topicInput').focus();
+        return;
+      }
+
+      const btn = document.getElementById('explainBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Thinking...`;
+
+      // Hide previous results
+      document.getElementById('explanationPanel').classList.remove('show');
+      document.getElementById('practiceSection').classList.remove('show');
+      document.getElementById('explanationContent').innerHTML = skeletonLines(5);
+
+      try {
+        const result = await callClaude(`
+You are a friendly, expert tutor. A student has asked you to explain the following topic or question:
+
+"${topic}"
+
+Give a clear, concise explanation in plain English suitable for a secondary school or sixth-form student. 
+Use examples, analogies, or step-by-step reasoning where helpful.
+Keep it under 250 words. Do NOT generate any practice questions here — just explain the concept clearly.
+`);
+
+        document.getElementById('explanationContent').textContent = result;
+        document.getElementById('explanationPanel').classList.add('show');
+        document.getElementById('explanationPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        document.getElementById('explanationContent').textContent = 'Sorry, something went wrong. Please try again.';
+        document.getElementById('explanationPanel').classList.add('show');
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fas fa-magic"></i> Explain it`;
+    });
+
+    // ── Start Practice ──────────────────────────────────────────────
+    document.getElementById('startPracticeBtn').addEventListener('click', async () => {
+      const topic = document.getElementById('topicInput').value.trim();
+      const btn = document.getElementById('startPracticeBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Generating questions...`;
+
+      // Reset cards
+      for (let i = 1; i <= 3; i++) {
+        document.getElementById(`qText${i}`).innerHTML = skeletonLines(2);
+        document.getElementById(`answer${i}`).value = '';
+        document.getElementById(`feedback${i}`).classList.remove('show');
+        if (i < 3) document.getElementById(`hintBox${i}`).classList.remove('show');
+      }
+      document.getElementById('practiceSection').classList.add('show');
+      document.getElementById('practiceSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      try {
+        const explanation = document.getElementById('explanationContent').textContent;
+
+        const raw = await callClaude(`
+You are a tutor. Based on the following topic and explanation, generate exactly 3 practice questions to test a student's understanding.
+
+Topic: "${topic}"
+Explanation: "${explanation}"
+
+Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exactly:
+{
+  "questions": [
+    {
+      "question": "Full question text here",
+      "bigHint": "A detailed hint that almost gives the answer away but still requires the student to apply it",
+      "mediumHint": "A more subtle hint — a nudge in the right direction",
+      "modelAnswer": "A concise correct answer for marking purposes"
+    },
+    { ... },
+    { ... }
+  ]
+}
+`);
+
+        // Parse JSON
+        const cleaned = raw.replace(/```json/g,'').replace(/```/g,'').trim();
+        const parsed = JSON.parse(cleaned);
+        practiceData = parsed;
+
+        for (let i = 0; i < 3; i++) {
+          const q = parsed.questions[i];
+          const n = i + 1;
+          document.getElementById(`qText${n}`).textContent = q.question;
+          if (n === 1) document.getElementById(`hintBox${n}`).textContent = q.bigHint;
+          if (n === 2) document.getElementById(`hintBox${n}`).textContent = q.mediumHint;
+        }
+
+      } catch (err) {
+        for (let i = 1; i <= 3; i++) {
+          document.getElementById(`qText${i}`).textContent = 'Could not load question. Please try again.';
+        }
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fas fa-sync"></i> Regenerate Questions`;
+    });
+
+    // ── Hint toggle ─────────────────────────────────────────────────
+    function toggleHint(n) {
+      const box = document.getElementById(`hintBox${n}`);
+      const label = document.getElementById(`hintLabel${n}`);
+      hintVisible[n-1] = !hintVisible[n-1];
+      box.classList.toggle('show', hintVisible[n-1]);
+      label.textContent = hintVisible[n-1] ? 'Hide hint' : 'Show hint';
+    }
+
+    // ── Submit answer ───────────────────────────────────────────────
+    async function submitAnswer(n) {
+      if (!practiceData) return;
+      const answer = document.getElementById(`answer${n}`).value.trim();
+      if (!answer) {
+        document.getElementById(`answer${n}`).focus();
+        return;
+      }
+
+      const btn = document.getElementById(`submitBtn${n}`);
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Marking...`;
+
+      const q = practiceData.questions[n - 1];
+
+      try {
+        const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
+
+        const res = await fetch('/api/mark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({
+            question: q.question,
+            userAnswer: answer,
+            modelAnswerHint: q.modelAnswer
+          })
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) throw new Error(result.error || 'Marking failed');
+
+        renderFeedback(n, result);
+
+      } catch (err) {
+        const fb = document.getElementById(`feedback${n}`);
+        fb.innerHTML = `<p style="color:#dc2626"><i class="fas fa-exclamation-circle"></i> Marking failed: ${err.message}</p>`;
+        fb.className = 'feedback-box fail show';
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fas fa-redo"></i> Remark`;
+    }
+
+    function renderFeedback(n, result) {
+      const score = result.score ?? 0;
+      const pass = score >= 6;
+      const fb = document.getElementById(`feedback${n}`);
+      fb.className = `feedback-box ${pass ? 'pass' : 'fail'} show`;
+
+      const strengthsHtml = (result.strengths || []).map(s =>
+        `<li><i class="fas fa-check-circle"></i> ${s}</li>`
+      ).join('');
+      const improvementsHtml = (result.improvements || []).map(s =>
+        `<li><i class="fas fa-arrow-circle-up"></i> ${s}</li>`
+      ).join('');
+
+      fb.innerHTML = `
+        <div class="feedback-score">${score}/10 ${pass ? '✅' : '🔄'}</div>
+        <div class="feedback-section-title">Strengths</div>
+        <ul class="feedback-list strengths">${strengthsHtml}</ul>
+        <div class="feedback-section-title">To Improve</div>
+        <ul class="feedback-list improvements">${improvementsHtml}</ul>
+      `;
+
+      fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────
+    async function callClaude(prompt) {
+      const response = await fetch(CLAUDE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message || 'AI request failed');
+      return data.content?.map(b => b.text || '').join('') || '';
+    }
+
+    function skeletonLines(n) {
+      return Array.from({length: n}, (_, i) =>
+        `<div class="skeleton-line" style="width:${85 - i*10}%"></div>`
+      ).join('');
+    }
+  </script>
+</body>
+</html>
