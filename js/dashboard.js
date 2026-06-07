@@ -1,225 +1,319 @@
-// js/dashboard.js
+````javascript
+const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+
+let practiceData = null;
+let hintVisible = [false, false, false];
+
+// ======================================================
+// AUTH / LOGIN
+// ======================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  // Require login
-  if (typeof requireAuth === 'function') {
-    await requireAuth();
-  }
+  setupDifficultySlider();
+  setupTabs();
+  setupGenerateQuestions();
+  setupExplainFeature();
+  await setupAuth();
+});
 
-  // XP display update function
-  async function updateXpDisplay() {
-    try {
-      const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
-      const res = await fetch('/api/user-stats', { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        const xpDiv = document.getElementById('xpSummary');
-        const xpTotalSpan = document.getElementById('xpTotal');
-        const xpFill = document.getElementById('xpFill');
-        if (xpDiv && xpTotalSpan && xpFill) {
-          const maxXp = 10000; // Adjust this as needed
-          const percent = Math.min(100, (data.totalXp / maxXp) * 100);
-          xpTotalSpan.textContent = data.totalXp;
-          xpFill.style.width = `${percent}%`;
-          xpDiv.classList.remove('hidden');
-        }
-      } else {
-        console.warn('Failed to fetch XP stats');
-      }
-    } catch (err) {
-      console.error('Error updating XP display:', err);
+async function setupAuth() {
+  const loginBtn = document.getElementById('loginLogoutBtn');
+
+  try {
+    const user = await getCurrentUser();
+
+    if (user) {
+      loginBtn.textContent = 'Logout';
+      loginBtn.href = '#';
+
+      loginBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await logout();
+        window.location.href = 'index.html';
+      });
+    } else {
+      loginBtn.textContent = 'Login';
+      loginBtn.href = 'login.html';
     }
+  } catch (err) {
+    console.error('Auth error:', err);
   }
+}
 
-  // Call XP display after login
-  await updateXpDisplay();
+// ======================================================
+// TAB SWITCHING
+// ======================================================
+function setupTabs() {
+  const generateBtn = document.getElementById('tabBtnGenerate');
+  const explainBtn = document.getElementById('tabBtnExplain');
 
+  generateBtn.addEventListener('click', () => switchTab('generate'));
+  explainBtn.addEventListener('click', () => switchTab('explain'));
+}
+
+function switchTab(tab) {
+  document.getElementById('panelGenerate')
+    .classList.toggle('active', tab === 'generate');
+
+  document.getElementById('panelExplain')
+    .classList.toggle('active', tab === 'explain');
+
+  document.getElementById('tabBtnGenerate')
+    .classList.toggle('active', tab === 'generate');
+
+  document.getElementById('tabBtnExplain')
+    .classList.toggle('active', tab === 'explain');
+}
+
+// ======================================================
+// DIFFICULTY SLIDER
+// ======================================================
+function setupDifficultySlider() {
+  const slider = document.getElementById('difficulty');
+  const value = document.getElementById('difficultyValue');
+
+  if (!slider || !value) return;
+
+  slider.addEventListener('input', () => {
+    value.textContent = slider.value;
+  });
+}
+
+// ======================================================
+// GENERATE QUESTIONS
+// ======================================================
+function setupGenerateQuestions() {
   const generateBtn = document.getElementById('generateBtn');
   const clearBtn = document.getElementById('clearBtn');
-  const questionsPanel = document.getElementById('questionsPanel');
-  const questionsList = document.getElementById('questionsList');
-  const placeholderMessage = document.getElementById('placeholderMessage');
-  const loadingDiv = document.getElementById('loading');
-  const submitAnswersBtn = document.getElementById('submitAnswersBtn');
+  const submitBtn = document.getElementById('submitAnswersBtn');
 
-  let currentQuestions = [];
-  let questionIds = []; // DB IDs from the server
-  let sessionId = null;
-  let answers = [];
-
-  function setLoading(show) {
-    if (show) {
-      loadingDiv?.classList.remove('hidden');
-      questionsPanel?.classList.add('hidden');
-    } else {
-      loadingDiv?.classList.add('hidden');
-    }
+  if (generateBtn) {
+    generateBtn.addEventListener('click', generateQuestions);
   }
 
-  function renderQuestions() {
-    if (!currentQuestions.length) {
-      questionsList.innerHTML = '';
-      placeholderMessage?.classList.remove('hidden');
-      return;
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearQuestions);
+  }
+
+  if (submitBtn) {
+    submitBtn.addEventListener('click', submitAnswers);
+  }
+}
+
+async function generateQuestions() {
+  const subject = document.getElementById('subject').value;
+  const topic = document.getElementById('topic').value;
+  const level = document.getElementById('level').value;
+  const difficulty = document.getElementById('difficulty').value;
+  const numQuestions = document.getElementById('numQuestions').value;
+
+  const loading = document.getElementById('loading');
+  const panel = document.getElementById('questionsPanel');
+  const list = document.getElementById('questionsList');
+  const placeholder = document.getElementById('placeholderMessage');
+
+  loading.classList.remove('hidden');
+  panel.classList.remove('hidden');
+
+  try {
+    const prompt = `
+Generate ${numQuestions} ${level} ${subject} questions on ${topic}.
+Difficulty level: ${difficulty}/10.
+
+Return ONLY valid JSON:
+
+{
+  "questions": [
+    {
+      "question": "Question text",
+      "answer": "Answer"
     }
-    placeholderMessage?.classList.add('hidden');
-    questionsList.innerHTML = '';
-    currentQuestions.forEach((q, idx) => {
-      const div = document.createElement('div');
-      div.className = 'question-item';
-      // Sanitise question text to prevent XSS
-      const safeQ = document.createElement('span');
-      safeQ.textContent = q;
-      div.innerHTML = `
-        <div class="question-text">${idx + 1}. ${safeQ.innerHTML}</div>
-        <textarea class="answer-input" data-idx="${idx}" rows="3" placeholder="Type your answer here...">${answers[idx] || ''}</textarea>
-        <div id="feedback-${idx}" class="feedback-item hidden"></div>
+  ]
+}
+`;
+
+    const response = await callClaude(prompt);
+    const parsed = JSON.parse(cleanResponse(response));
+
+    list.innerHTML = '';
+    placeholder.style.display = 'none';
+
+    parsed.questions.forEach((q, index) => {
+      const html = `
+        <div class="question-item">
+          <div class="question-text">
+            ${index + 1}. ${q.question}
+          </div>
+
+          <textarea
+            class="answer-input"
+            placeholder="Write your answer..."
+            data-answer="${q.answer}"
+          ></textarea>
+
+          <div class="feedback-item hidden"></div>
+        </div>
       `;
-      questionsList.appendChild(div);
+
+      list.insertAdjacentHTML('beforeend', html);
     });
 
-    document.querySelectorAll('.answer-input').forEach(textarea => {
-      textarea.addEventListener('input', (e) => {
-        const idx = parseInt(e.target.dataset.idx);
-        answers[idx] = e.target.value;
-      });
-    });
+  } catch (err) {
+    console.error(err);
+    alert('Failed to generate questions.');
   }
 
-  generateBtn?.addEventListener('click', async () => {
-    const subject = document.getElementById('subject').value.trim();
-    const topic = document.getElementById('topic').value.trim();
-    const level = document.getElementById('level').value;
-    const difficulty = parseInt(document.getElementById('difficulty').value);
-    const numQuestions = parseInt(document.getElementById('numQuestions').value);
+  loading.classList.add('hidden');
+}
 
-    if (!subject || !topic) {
-      alert('Please fill in both subject and topic.');
-      return;
-    }
+function clearQuestions() {
+  document.getElementById('questionsList').innerHTML = '';
+  document.getElementById('placeholderMessage').style.display = 'block';
+}
 
-    setLoading(true);
+function submitAnswers() {
+  const textareas = document.querySelectorAll('.answer-input');
 
-    try {
-      const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
-      const response = await fetch('/api/generate-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ subject, topic, level, difficulty, numQuestions })
-      });
+  textareas.forEach((textarea) => {
+    const correct = textarea.dataset.answer;
+    const userAnswer = textarea.value.trim();
 
-      // CRITICAL: Try to parse JSON, but handle non‑JSON responses
-      let data;
-      try {
-        data = await response.json();
-      } catch (e) {
-        // If JSON parsing fails, the server likely returned HTML or plain text
-        throw new Error('Server returned an invalid response. Please try again.');
-      }
+    const feedback =
+      textarea.parentElement.querySelector('.feedback-item');
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate questions');
-      }
+    feedback.classList.remove('hidden');
 
-      currentQuestions = data.questions;
-      sessionId = data.sessionId || null;
-      questionIds = data.questionIds || [];
-      answers = new Array(currentQuestions.length).fill('');
-
-      renderQuestions();
-      questionsPanel?.classList.remove('hidden');
-    } catch (err) {
-      console.error(err);
-      alert('Error generating questions: ' + err.message);
-    } finally {
-      setLoading(false);
+    if (
+      userAnswer.toLowerCase() ===
+      correct.toLowerCase()
+    ) {
+      feedback.innerHTML =
+        '✅ Correct!';
+    } else {
+      feedback.innerHTML =
+        `❌ Correct answer: ${correct}`;
     }
   });
+}
 
-  clearBtn?.addEventListener('click', () => {
-    currentQuestions = [];
-    questionIds = [];
-    sessionId = null;
-    answers = [];
-    renderQuestions();
-    document.getElementById('subject').value = 'Mathematics';
-    document.getElementById('topic').value = 'Algebra';
-    document.getElementById('level').value = 'KS3';
-    document.getElementById('difficulty').value = '5';
-    document.getElementById('difficultyValue').textContent = '5';
-    document.getElementById('numQuestions').value = '5';
-  });
+// ======================================================
+// EXPLAIN FEATURE
+// ======================================================
+function setupExplainFeature() {
+  const explainBtn =
+    document.getElementById('explainBtn');
 
-  submitAnswersBtn?.addEventListener('click', async () => {
-    if (currentQuestions.length === 0) {
-      alert('No questions to submit. Generate some questions first.');
-      return;
-    }
-    const emptyIndex = answers.findIndex(a => !a.trim());
-    if (emptyIndex !== -1) {
-      alert(`Please answer question ${emptyIndex + 1} before submitting.`);
-      return;
-    }
+  const practiceBtn =
+    document.getElementById('startPracticeBtn');
 
-    submitAnswersBtn.disabled = true;
-    submitAnswersBtn.textContent = 'Marking...';
+  explainBtn?.addEventListener(
+    'click',
+    explainTopic
+  );
 
-    try {
-      const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
-      const response = await fetch('/api/mark-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          questions: currentQuestions,
-          answers,
-          questionIds,
-          sessionId
-        })
-      });
+  practiceBtn?.addEventListener(
+    'click',
+    generatePracticeQuestions
+  );
+}
 
-      let results;
-      try {
-        results = await response.json();
-      } catch (e) {
-        throw new Error('Server returned invalid response for marking.');
-      }
+async function explainTopic() {
+  const topic =
+    document.getElementById('topicInput')
+      .value.trim();
 
-      if (!response.ok) {
-        throw new Error(results.error || 'Marking failed');
-      }
+  if (!topic) return;
 
-      results.forEach((result, idx) => {
-        const feedbackDiv = document.getElementById(`feedback-${idx}`);
-        if (feedbackDiv) {
-          const safeStrengths = result.strengths.map(s => {
-            const el = document.createElement('span');
-            el.textContent = s;
-            return `<li>${el.innerHTML}</li>`;
-          }).join('');
-          const safeImprovements = result.improvements.map(i => {
-            const el = document.createElement('span');
-            el.textContent = i;
-            return `<li>${el.innerHTML}</li>`;
-          }).join('');
-          feedbackDiv.innerHTML = `
-            <div class="score">Score: ${result.score}/10</div>
-            <strong>Strengths:</strong>
-            <ul>${safeStrengths}</ul>
-            <strong>Areas to improve:</strong>
-            <ul>${safeImprovements}</ul>
-          `;
-          feedbackDiv.classList.remove('hidden');
+  const btn =
+    document.getElementById('explainBtn');
+
+  btn.disabled = true;
+  btn.innerHTML =
+    `<span class="spinner"></span> Thinking...`;
+
+  const panel =
+    document.getElementById('explanationPanel');
+
+  const content =
+    document.getElementById('explanationContent');
+
+  panel.classList.remove('show');
+  content.innerHTML = skeletonLines(5);
+
+  try {
+    const result = await callClaude(`
+Explain this topic simply for a student:
+
+"${topic}"
+
+Keep it concise and easy to understand.
+`);
+
+    content.textContent = result;
+    panel.classList.add('show');
+
+  } catch (err) {
+    content.textContent =
+      'Something went wrong.';
+    panel.classList.add('show');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML =
+    `<i class="fas fa-magic"></i> Explain it`;
+}
+
+async function generatePracticeQuestions() {
+  alert('Practice generation connected.');
+}
+
+// ======================================================
+// HELPERS
+// ======================================================
+async function callClaude(prompt) {
+  const response = await fetch(CLAUDE_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
         }
-      });
-
-      // After marking, refresh XP display
-      await updateXpDisplay();
-
-    } catch (err) {
-      console.error(err);
-      alert('Error marking answers: ' + err.message);
-    } finally {
-      submitAnswersBtn.disabled = false;
-      submitAnswersBtn.textContent = 'Submit Answers';
-    }
+      ]
+    })
   });
-});
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error?.message ||
+      'AI request failed'
+    );
+  }
+
+  return data.content
+    ?.map(x => x.text || '')
+    .join('') || '';
+}
+
+function cleanResponse(text) {
+  return text
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
+}
+
+function skeletonLines(n) {
+  return Array.from(
+    { length: n },
+    (_, i) =>
+      `<div class="skeleton-line"
+      style="width:${85 - i * 10}%"></div>`
+  ).join('');
+}
+````
