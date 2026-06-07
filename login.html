@@ -196,6 +196,41 @@
             display: block;
         }
 
+        /* Toast popup for wrong password */
+        .toast-popup {
+            position: fixed;
+            top: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(-120px);
+            background: #1e293b;
+            color: white;
+            padding: 0.9rem 1.5rem;
+            border-radius: 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+            z-index: 9999;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+            opacity: 0;
+            white-space: nowrap;
+        }
+
+        .toast-popup.toast-error {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .toast-popup.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast-popup i {
+            font-size: 1.1rem;
+        }
+
         @media (max-width: 480px) {
             .auth-card {
                 padding: 1.5rem;
@@ -245,10 +280,69 @@
     </div>
     <script src="js/auth.js"></script>
     <script>
-        // Redirect if already logged in
+        // Toast helper
+        function showToast(message, type = 'error') {
+            let toast = document.getElementById('toastPopup');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toastPopup';
+                toast.className = 'toast-popup';
+                document.body.appendChild(toast);
+            }
+            toast.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+            toast.className = `toast-popup toast-${type}`;
+            // Force reflow
+            toast.offsetHeight;
+            toast.classList.add('show');
+            clearTimeout(toast._hideTimer);
+            toast._hideTimer = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3500);
+        }
+
+        // Override login error to also show toast
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof redirectIfLoggedIn === 'function') redirectIfLoggedIn();
+
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('email')?.value?.trim();
+                    const password = document.getElementById('password')?.value;
+                    const errorEl = document.getElementById('authError');
+                    if (errorEl) { errorEl.textContent = ''; errorEl.classList.remove('show'); }
+
+                    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                    const sb = createClient(
+                        'https://qshqulmdhuwtcedrdrxq.supabase.co',
+                        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHF1bG1kaHV3dGNlZHJkcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODEwMTMsImV4cCI6MjA4OTg1NzAxM30.UY7zcNwa1xmAhiQk2i8kFAPVyq7lG2B4TzM41eCG8s0'
+                    );
+
+                    const { error } = await sb.auth.signInWithPassword({ email, password });
+
+                    if (error) {
+                        const msg = error.message?.toLowerCase().includes('invalid') || error.message?.toLowerCase().includes('credentials')
+                            ? 'Incorrect password or account does not exist'
+                            : error.message || 'Login failed. Please try again.';
+                        showToast(msg);
+                        if (errorEl) { errorEl.textContent = msg; errorEl.classList.add('show'); }
+                        // Shake the card
+                        document.querySelector('.auth-card').style.animation = 'none';
+                        setTimeout(() => {
+                            document.querySelector('.auth-card').style.animation = 'shake 0.4s ease';
+                        }, 10);
+                        return;
+                    }
+                    window.location.href = 'dashboard.html';
+                }, { once: false });
+            }
         });
+
+        // Shake animation
+        const shakeStyle = document.createElement('style');
+        shakeStyle.textContent = `@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }`;
+        document.head.appendChild(shakeStyle);
 
         // Password visibility toggle
         const togglePassword = document.getElementById('togglePassword');
