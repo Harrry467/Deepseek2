@@ -154,9 +154,14 @@
       gap: 0.5rem;
     }
 
-    .start-practice-btn:hover {
+    .start-practice-btn:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 8px 20px rgba(59,130,246,0.35);
+    }
+
+    .start-practice-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     /* Practice section */
@@ -274,6 +279,7 @@
       min-height: 80px;
       transition: border-color 0.2s, box-shadow 0.2s;
       margin-bottom: 0.75rem;
+      box-sizing: border-box;
     }
 
     .answer-textarea:focus {
@@ -406,6 +412,20 @@
       font-weight: 600;
       margin-bottom: 1rem;
     }
+
+    /* Error banner */
+    .error-banner {
+      background: #fff1f2;
+      border: 1.5px solid #fda4af;
+      border-radius: 0.85rem;
+      padding: 0.85rem 1.1rem;
+      color: #be123c;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body>
@@ -530,7 +550,7 @@
     </div>
   </footer>
 
-  <script src="js/auth.js"></script>
+  <!-- FIX: Only one auth.js script tag (was duplicated before) -->
   <script src="js/auth.js"></script>
   <script>
     // ── State ───────────────────────────────────────────────────────
@@ -583,12 +603,15 @@
 
       try {
         const { explanation } = await apiFetch('/api/explain', { topic });
+        // FIX: Use textContent (not innerHTML) to safely set the explanation
         document.getElementById('explanationContent').textContent = explanation;
+
         // Reset practice button for the new topic
         const practiceBtn = document.getElementById('startPracticeBtn');
         practiceBtn.disabled = false;
         practiceBtn.innerHTML = `<i class="fas fa-dumbbell"></i> Start Practice Questions`;
       } catch (err) {
+        console.error('explain error:', err);
         document.getElementById('explanationContent').textContent =
           `Sorry, something went wrong: ${err.message}. Please try again.`;
       }
@@ -605,6 +628,9 @@
       const btn = document.getElementById('startPracticeBtn');
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner"></span> Generating questions...`;
+
+      // FIX: Capture the explanation text BEFORE overwriting cards with skeletons
+      const explanation = document.getElementById('explanationContent').textContent.trim();
 
       // Reset all 3 cards to skeleton / clean state
       for (let i = 1; i <= 3; i++) {
@@ -626,22 +652,47 @@
       document.getElementById('practiceSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       try {
-        const explanation = document.getElementById('explanationContent').textContent;
-        const { questions } = await apiFetch('/api/explain-questions', { topic, explanation });
+        const responseData = await apiFetch('/api/explain-questions', { topic, explanation });
+
+        // FIX: Robustly extract questions regardless of nesting shape
+        // Handles: { questions: [...] }  or  { data: { questions: [...] } }  or  [...]
+        let questions = null;
+        if (Array.isArray(responseData)) {
+          questions = responseData;
+        } else if (Array.isArray(responseData?.questions)) {
+          questions = responseData.questions;
+        } else if (Array.isArray(responseData?.data?.questions)) {
+          questions = responseData.data.questions;
+        }
+
+        if (!questions || questions.length < 3) {
+          console.error('Unexpected response shape:', JSON.stringify(responseData));
+          throw new Error(`Unexpected response format from server. Got: ${JSON.stringify(responseData).slice(0, 120)}`);
+        }
 
         practiceData = { questions };
 
+        // FIX: Populate all three question cards clearly and safely
         questions.forEach((q, i) => {
           const n = i + 1;
-          document.getElementById(`qText${n}`).textContent = q.question;
-          if (n === 1) document.getElementById(`hintBox1`).textContent = q.bigHint;
-          if (n === 2) document.getElementById(`hintBox2`).textContent = q.mediumHint;
+          const questionText = q.question || q.text || q.questionText || `Question ${n}`;
+          document.getElementById(`qText${n}`).textContent = questionText;
+
+          if (n === 1) {
+            const hint = q.bigHint || q.hint || q.hintBig || '';
+            document.getElementById('hintBox1').textContent = hint;
+          }
+          if (n === 2) {
+            const hint = q.mediumHint || q.hint || q.hintMedium || '';
+            document.getElementById('hintBox2').textContent = hint;
+          }
         });
 
       } catch (err) {
+        console.error('explain-questions error:', err);
         for (let i = 1; i <= 3; i++) {
-          document.getElementById(`qText${i}`).textContent =
-            `Could not load question (${err.message}). Please try again.`;
+          document.getElementById(`qText${i}`).innerHTML =
+            `<div class="error-banner"><i class="fas fa-exclamation-circle"></i> Could not load question: ${err.message}. Please try again.</div>`;
         }
       }
 
@@ -678,6 +729,7 @@
         });
         renderFeedback(n, result);
       } catch (err) {
+        console.error('mark error:', err);
         const fb = document.getElementById(`feedback${n}`);
         fb.innerHTML = `<p style="color:#dc2626"><i class="fas fa-exclamation-circle"></i> Marking failed: ${err.message}</p>`;
         fb.className = 'feedback-box fail show';
