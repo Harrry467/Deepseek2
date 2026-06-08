@@ -1,5 +1,5 @@
-// api/explain-questions.js
 import { extractJSON } from '../utils/ai.js';
+// api/explain-questions.js
 import { supabase } from '../utils/supabase.js';
 
 async function getUserFromRequest(req) {
@@ -9,6 +9,37 @@ async function getUserFromRequest(req) {
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
   return user;
+}
+
+async function callDeepSeek(messages, max_tokens = 1000) {
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages,
+      temperature: 0.7,
+      max_tokens,
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `DeepSeek error ${response.status}`);
+  }
+
+  const content = data?.choices?.[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error('Empty response from DeepSeek');
+  }
+
+  return content;
 }
 
 export default async function handler(req, res) {
@@ -60,48 +91,21 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exac
 
   // ---------- DEEPSEEK REQUEST ----------
   try {
-    const aiResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: 'You only return valid JSON. Never include markdown or extra text.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1200
-      })
-    });
+    const content = await callDeepSeek([
+      { role: 'system', content: 'Follow instructions exactly.' },
+      { role: 'user', content: prompt }
+    ], 1200);
 
-    const data = await aiResponse.json();
-
-    if (!aiResponse.ok) {
-      console.error('DeepSeek error:', data);
-      return res.status(500).json({ error: 'DeepSeek API failed', details: data.error?.message });
-    }
-
-    const aiText = data.choices?.[0]?.message?.content;
-    if (!aiText) {
-      return res.status(500).json({ error: 'No response from DeepSeek' });
-    }
-
-    // ---------- PARSE ----------
-    const parsed = extractJSON(aiText);
+    const parsed = extractJSON(content);
 
     if (!Array.isArray(parsed?.questions) || parsed.questions.length < 3) {
-      console.error('Unexpected AI format:', aiText);
-      return res.status(500).json({ error: 'AI returned unexpected format' });
+      throw new Error('AI returned invalid question format');
     }
 
-    // Normalise fields so the frontend never gets undefined
     const questions = parsed.questions.slice(0, 3).map((q, i) => ({
-      question:    q.question    || `Question ${i + 1}`,
-      bigHint:     q.bigHint     || '',
-      mediumHint:  q.mediumHint  || '',
+      question: q.question || `Question ${i + 1}`,
+      bigHint: q.bigHint || '',
+      mediumHint: q.mediumHint || '',
       modelAnswer: q.modelAnswer || ''
     }));
 
