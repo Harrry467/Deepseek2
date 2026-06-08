@@ -1,6 +1,6 @@
-import { extractJSON } from '../utils/ai.js';
 // api/explain-questions.js
 import { supabase } from '../utils/supabase.js';
+import { extractJSON } from '../utils/ai.js';
 
 async function getUserFromRequest(req) {
   const authHeader = req.headers.authorization;
@@ -12,7 +12,7 @@ async function getUserFromRequest(req) {
 }
 
 async function callDeepSeek(messages, max_tokens = 1000) {
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
