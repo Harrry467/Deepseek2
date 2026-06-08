@@ -1,5 +1,4 @@
 // api/explain.js
-import { extractJSON } from '../utils/ai.js';
 import { supabase } from '../utils/supabase.js';
 
 async function getUserFromRequest(req) {
@@ -9,6 +8,37 @@ async function getUserFromRequest(req) {
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
   return user;
+}
+
+async function callDeepSeek(messages, max_tokens = 1000) {
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages,
+      temperature: 0.7,
+      max_tokens,
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `DeepSeek error ${response.status}`);
+  }
+
+  const content = data?.choices?.[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error('Empty response from DeepSeek');
+  }
+
+  return content;
 }
 
 export default async function handler(req, res) {
@@ -39,36 +69,12 @@ Keep it under 250 words. Do NOT generate any practice questions — just explain
 
   // ---------- DEEPSEEK REQUEST ----------
   try {
-    const aiResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: 'You are a clear, friendly tutor who explains concepts concisely.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 800
-      })
-    });
+    const content = await callDeepSeek([
+      { role: 'system', content: 'Follow instructions exactly.' },
+      { role: 'user', content: prompt }
+    ], 800);
 
-    const data = await aiResponse.json();
-
-    if (!aiResponse.ok) {
-      console.error('DeepSeek error:', data);
-      return res.status(500).json({ error: 'DeepSeek API failed', details: data.error?.message });
-    }
-
-    const explanation = data.choices?.[0]?.message?.content;
-    if (!explanation) {
-      return res.status(500).json({ error: 'No response from DeepSeek' });
-    }
-
-    return res.status(200).json({ explanation: explanation.trim() });
+    return res.status(200).json({ explanation: content.trim() });
 
   } catch (err) {
     console.error('explain.js error:', err);
