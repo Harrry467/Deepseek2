@@ -11,7 +11,7 @@ async function getUserFromRequest(req) {
 }
 
 async function callDeepSeek(messages, max_tokens = 1000) {
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -21,8 +21,7 @@ async function callDeepSeek(messages, max_tokens = 1000) {
       model: 'deepseek-chat',
       messages,
       temperature: 0.7,
-      max_tokens,
-      response_format: { type: 'json_object' }
+      max_tokens
     })
   });
 
