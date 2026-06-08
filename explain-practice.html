@@ -531,16 +531,13 @@
   </footer>
 
   <script src="js/auth.js"></script>
+  <script src="js/auth.js"></script>
   <script>
-    const SUPABASE_URL = 'https://qshqulmdhuwtcedrdrxq.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzaHF1bG1kaHV3dGNlZHJkcnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODEwMTMsImV4cCI6MjA4OTg1NzAxM30.UY7zcNwa1xmAhiQk2i8kFAPVyq7lG2B4TzM41eCG8s0';
-    const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+    // ── State ───────────────────────────────────────────────────────
+    let practiceData = null; // { questions: [{question, bigHint, mediumHint, modelAnswer}] }
+    let hintVisible  = [false, false, false];
 
-    // Stored practice data
-    let practiceData = null; // { questions: [{q, hint, modelAnswer}], explanation }
-    let hintVisible = [false, false, false];
-
-    // Nav login/logout
+    // ── Nav login/logout ────────────────────────────────────────────
     (async () => {
       await requireAuth();
       const loginBtn = document.getElementById('loginLogoutBtn');
@@ -555,104 +552,96 @@
       }
     })();
 
+    // ── Shared fetch helper ─────────────────────────────────────────
+    async function apiFetch(path, body) {
+      const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Request to ${path} failed`);
+      return data;
+    }
+
     // ── Explain button ──────────────────────────────────────────────
     document.getElementById('explainBtn').addEventListener('click', async () => {
       const topic = document.getElementById('topicInput').value.trim();
-      if (!topic) {
-        document.getElementById('topicInput').focus();
-        return;
-      }
+      if (!topic) { document.getElementById('topicInput').focus(); return; }
 
       const btn = document.getElementById('explainBtn');
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner"></span> Thinking...`;
 
-      // Hide previous results
-      document.getElementById('explanationPanel').classList.remove('show');
+      // Reset previous state
+      practiceData = null;
       document.getElementById('practiceSection').classList.remove('show');
       document.getElementById('explanationContent').innerHTML = skeletonLines(5);
+      document.getElementById('explanationPanel').classList.add('show');
+      document.getElementById('explanationPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       try {
-        const result = await callClaude(`
-You are a friendly, expert tutor. A student has asked you to explain the following topic or question:
-
-"${topic}"
-
-Give a clear, concise explanation in plain English suitable for a secondary school or sixth-form student. 
-Use examples, analogies, or step-by-step reasoning where helpful.
-Keep it under 250 words. Do NOT generate any practice questions here — just explain the concept clearly.
-`);
-
-        document.getElementById('explanationContent').textContent = result;
-        document.getElementById('explanationPanel').classList.add('show');
-        document.getElementById('explanationPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-
+        const { explanation } = await apiFetch('/api/explain', { topic });
+        document.getElementById('explanationContent').textContent = explanation;
+        // Reset practice button for the new topic
+        const practiceBtn = document.getElementById('startPracticeBtn');
+        practiceBtn.disabled = false;
+        practiceBtn.innerHTML = `<i class="fas fa-dumbbell"></i> Start Practice Questions`;
       } catch (err) {
-        document.getElementById('explanationContent').textContent = 'Sorry, something went wrong. Please try again.';
-        document.getElementById('explanationPanel').classList.add('show');
+        document.getElementById('explanationContent').textContent =
+          `Sorry, something went wrong: ${err.message}. Please try again.`;
       }
 
       btn.disabled = false;
       btn.innerHTML = `<i class="fas fa-magic"></i> Explain it`;
     });
 
-    // ── Start Practice ──────────────────────────────────────────────
+    // ── Start / Regenerate Practice ─────────────────────────────────
     document.getElementById('startPracticeBtn').addEventListener('click', async () => {
       const topic = document.getElementById('topicInput').value.trim();
+      if (!topic) return;
+
       const btn = document.getElementById('startPracticeBtn');
       btn.disabled = true;
       btn.innerHTML = `<span class="spinner"></span> Generating questions...`;
 
-      // Reset cards
+      // Reset all 3 cards to skeleton / clean state
       for (let i = 1; i <= 3; i++) {
         document.getElementById(`qText${i}`).innerHTML = skeletonLines(2);
-        document.getElementById(`answer${i}`).value = '';
-        document.getElementById(`feedback${i}`).classList.remove('show');
-        if (i < 3) document.getElementById(`hintBox${i}`).classList.remove('show');
+        document.getElementById(`answer${i}`).value   = '';
+        const fb = document.getElementById(`feedback${i}`);
+        fb.className = 'feedback-box';
+        fb.innerHTML = '';
+        const submitBtn = document.getElementById(`submitBtn${i}`);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i class="fas fa-check"></i> Mark my answer`;
+        if (i < 3) {
+          document.getElementById(`hintBox${i}`).classList.remove('show');
+          document.getElementById(`hintLabel${i}`).textContent = 'Show hint';
+          hintVisible[i - 1] = false;
+        }
       }
       document.getElementById('practiceSection').classList.add('show');
       document.getElementById('practiceSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       try {
         const explanation = document.getElementById('explanationContent').textContent;
+        const { questions } = await apiFetch('/api/explain-questions', { topic, explanation });
 
-        const raw = await callClaude(`
-You are a tutor. Based on the following topic and explanation, generate exactly 3 practice questions to test a student's understanding.
+        practiceData = { questions };
 
-Topic: "${topic}"
-Explanation: "${explanation}"
-
-Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exactly:
-{
-  "questions": [
-    {
-      "question": "Full question text here",
-      "bigHint": "A detailed hint that almost gives the answer away but still requires the student to apply it",
-      "mediumHint": "A more subtle hint — a nudge in the right direction",
-      "modelAnswer": "A concise correct answer for marking purposes"
-    },
-    { ... },
-    { ... }
-  ]
-}
-`);
-
-        // Parse JSON
-        const cleaned = raw.replace(/```json/g,'').replace(/```/g,'').trim();
-        const parsed = JSON.parse(cleaned);
-        practiceData = parsed;
-
-        for (let i = 0; i < 3; i++) {
-          const q = parsed.questions[i];
+        questions.forEach((q, i) => {
           const n = i + 1;
           document.getElementById(`qText${n}`).textContent = q.question;
-          if (n === 1) document.getElementById(`hintBox${n}`).textContent = q.bigHint;
-          if (n === 2) document.getElementById(`hintBox${n}`).textContent = q.mediumHint;
-        }
+          if (n === 1) document.getElementById(`hintBox1`).textContent = q.bigHint;
+          if (n === 2) document.getElementById(`hintBox2`).textContent = q.mediumHint;
+        });
 
       } catch (err) {
         for (let i = 1; i <= 3; i++) {
-          document.getElementById(`qText${i}`).textContent = 'Could not load question. Please try again.';
+          document.getElementById(`qText${i}`).textContent =
+            `Could not load question (${err.message}). Please try again.`;
         }
       }
 
@@ -662,21 +651,18 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exac
 
     // ── Hint toggle ─────────────────────────────────────────────────
     function toggleHint(n) {
-      const box = document.getElementById(`hintBox${n}`);
+      const box   = document.getElementById(`hintBox${n}`);
       const label = document.getElementById(`hintLabel${n}`);
-      hintVisible[n-1] = !hintVisible[n-1];
-      box.classList.toggle('show', hintVisible[n-1]);
-      label.textContent = hintVisible[n-1] ? 'Hide hint' : 'Show hint';
+      hintVisible[n - 1] = !hintVisible[n - 1];
+      box.classList.toggle('show', hintVisible[n - 1]);
+      label.textContent = hintVisible[n - 1] ? 'Hide hint' : 'Show hint';
     }
 
     // ── Submit answer ───────────────────────────────────────────────
     async function submitAnswer(n) {
       if (!practiceData) return;
       const answer = document.getElementById(`answer${n}`).value.trim();
-      if (!answer) {
-        document.getElementById(`answer${n}`).focus();
-        return;
-      }
+      if (!answer) { document.getElementById(`answer${n}`).focus(); return; }
 
       const btn = document.getElementById(`submitBtn${n}`);
       btn.disabled = true;
@@ -685,24 +671,12 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exac
       const q = practiceData.questions[n - 1];
 
       try {
-        const authHeaders = typeof getAuthHeader === 'function' ? await getAuthHeader() : {};
-
-        const res = await fetch('/api/mark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({
-            question: q.question,
-            userAnswer: answer,
-            modelAnswerHint: q.modelAnswer
-          })
+        const result = await apiFetch('/api/mark', {
+          question:        q.question,
+          userAnswer:      answer,
+          modelAnswerHint: q.modelAnswer
         });
-
-        const result = await res.json();
-
-        if (!res.ok) throw new Error(result.error || 'Marking failed');
-
         renderFeedback(n, result);
-
       } catch (err) {
         const fb = document.getElementById(`feedback${n}`);
         fb.innerHTML = `<p style="color:#dc2626"><i class="fas fa-exclamation-circle"></i> Marking failed: ${err.message}</p>`;
@@ -713,18 +687,15 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exac
       btn.innerHTML = `<i class="fas fa-redo"></i> Remark`;
     }
 
+    // ── Render feedback ─────────────────────────────────────────────
     function renderFeedback(n, result) {
       const score = result.score ?? 0;
-      const pass = score >= 6;
-      const fb = document.getElementById(`feedback${n}`);
+      const pass  = score >= 6;
+      const fb    = document.getElementById(`feedback${n}`);
       fb.className = `feedback-box ${pass ? 'pass' : 'fail'} show`;
 
-      const strengthsHtml = (result.strengths || []).map(s =>
-        `<li><i class="fas fa-check-circle"></i> ${s}</li>`
-      ).join('');
-      const improvementsHtml = (result.improvements || []).map(s =>
-        `<li><i class="fas fa-arrow-circle-up"></i> ${s}</li>`
-      ).join('');
+      const strengthsHtml    = (result.strengths    || []).map(s => `<li><i class="fas fa-check-circle"></i> ${s}</li>`).join('');
+      const improvementsHtml = (result.improvements || []).map(s => `<li><i class="fas fa-arrow-circle-up"></i> ${s}</li>`).join('');
 
       fb.innerHTML = `
         <div class="feedback-score">${score}/10 ${pass ? '✅' : '🔄'}</div>
@@ -733,29 +704,13 @@ Return ONLY valid JSON — no markdown, no explanation, no preamble. Format exac
         <div class="feedback-section-title">To Improve</div>
         <ul class="feedback-list improvements">${improvementsHtml}</ul>
       `;
-
       fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────
-    async function callClaude(prompt) {
-      const response = await fetch(CLAUDE_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || 'AI request failed');
-      return data.content?.map(b => b.text || '').join('') || '';
-    }
-
+    // ── Skeleton loader helper ──────────────────────────────────────
     function skeletonLines(n) {
-      return Array.from({length: n}, (_, i) =>
-        `<div class="skeleton-line" style="width:${85 - i*10}%"></div>`
+      return Array.from({ length: n }, (_, i) =>
+        `<div class="skeleton-line" style="width:${85 - i * 10}%"></div>`
       ).join('');
     }
   </script>
