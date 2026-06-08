@@ -1,5 +1,4 @@
 // api/generate-questions.js
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -9,12 +8,10 @@ const supabase = createClient(
 
 function cleanJSON(text) {
   try {
-    // Remove markdown code blocks if DeepSeek adds them
     const cleaned = text
       .replace(/```json/g, '')
       .replace(/```/g, '')
       .trim();
-
     return JSON.parse(cleaned);
   } catch (err) {
     console.error('JSON parse failed:', err);
@@ -22,81 +19,58 @@ function cleanJSON(text) {
   }
 }
 
+async function fetchWithTimeout(url, options, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      error: 'Method not allowed'
-    });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const {
-      subject,
-      topic,
-      level,
-      difficulty,
-      numQuestions
-    } = req.body;
+    const { subject, topic, level, difficulty, numQuestions } = req.body;
 
-    // ---------- VALIDATION ----------
     if (!subject || !topic) {
-      return res.status(400).json({
-        error: 'Subject and topic are required'
-      });
+      return res.status(400).json({ error: 'Subject and topic are required' });
     }
 
-    const difficultyNum = Number(difficulty || 5);
-    const questionCount = Number(numQuestions || 5);
+    const difficultyNum = Math.min(10, Math.max(1, Number(difficulty || 5)));
+    const questionCount = Math.min(20, Math.max(1, Number(numQuestions || 5)));
 
-    // ---------- AUTH ----------
+    // Auth
     const authHeader = req.headers.authorization;
-
     if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({
-        error: 'Not logged in'
-      });
+      return res.status(401).json({ error: 'Not logged in' });
     }
 
     const token = authHeader.split(' ')[1];
-
-    const {
-      data: { user },
-      error: userError
-    } = await supabase.auth.getUser(token);
-
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) {
-      console.error(userError);
-
-      return res.status(401).json({
-        error: 'Invalid session'
-      });
+      return res.status(401).json({ error: 'Invalid session' });
     }
 
-    // ---------- CREATE SESSION ----------
-    const { data: session, error: sessionError } =
-      await supabase
-        .from('sessions')
-        .insert({
-          user_id: user.id,
-          subject,
-          topic,
-          level,
-          difficulty: difficultyNum
-        })
-        .select()
-        .single();
+    // Create session
+    const { data: session, error: sessionError } = await supabase
+      .from('sessions')
+      .insert({ user_id: user.id, subject, topic, level, difficulty: difficultyNum })
+      .select()
+      .single();
 
     if (sessionError) {
-      console.error(sessionError);
-
-      return res.status(500).json({
-        error: 'Could not create session'
-      });
+      console.error('Session insert error:', sessionError);
+      return res.status(500).json({ error: 'Could not create session' });
     }
 
-    // ---------- AI PROMPT ----------
-    const prompt = `
-Generate EXACTLY ${questionCount} questions.
+    // Build prompt
+    const prompt = `Generate EXACTLY ${questionCount} questions.
 
 Subject: ${subject}
 Topic: ${topic}
@@ -114,117 +88,92 @@ RULES:
     "question 1",
     "question 2"
   ]
-}
-`;
+}`;
 
-    // ---------- DEEPSEEK REQUEST ----------
-    const aiResponse = await fetch(
-      'https://api.deepseek.com/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You only return valid JSON. Never include markdown.'
+    // Call DeepSeek with timeout + retry
+    let aiResponse;
+    let lastError;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        aiResponse = await fetchWithTimeout(
+          'https://api.deepseek.com/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
             },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 1500
-        })
+            body: JSON.stringify({
+              model: 'deepseek-chat',
+              messages: [
+                { role: 'system', content: 'You only return valid JSON. Never include markdown.' },
+                { role: 'user', content: prompt }
+              ],
+              temperature: 0.7,
+              max_tokens: 1500
+            })
+          },
+          15000
+        );
+        if (aiResponse.ok) break;
+        lastError = new Error(`DeepSeek responded with status ${aiResponse.status}`);
+      } catch (err) {
+        lastError = err;
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, attempt * 1000));
+        }
       }
-    );
+    }
 
-    // ---------- API ERROR ----------
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-
-      console.error('DeepSeek Error:', errText);
-
-      return res.status(500).json({
-        error: 'DeepSeek API failed',
-        details: errText
-      });
+    if (!aiResponse?.ok) {
+      const errText = aiResponse ? await aiResponse.text() : lastError?.message;
+      console.error('DeepSeek error after retries:', errText);
+      return res.status(500).json({ error: 'DeepSeek API failed', details: errText });
     }
 
     const aiData = await aiResponse.json();
-
-    const aiText =
-      aiData?.choices?.[0]?.message?.content;
+    const aiText = aiData?.choices?.[0]?.message?.content;
 
     if (!aiText) {
-      console.error(aiData);
-
-      return res.status(500).json({
-        error: 'No AI response received'
-      });
+      console.error('No content in DeepSeek response:', aiData);
+      return res.status(500).json({ error: 'No AI response received' });
     }
 
-    // ---------- PARSE QUESTIONS ----------
     const parsed = cleanJSON(aiText);
-
-    if (!parsed?.questions) {
-      console.error(aiText);
-
-      return res.status(500).json({
-        error: 'AI returned invalid format'
-      });
+    if (!Array.isArray(parsed?.questions)) {
+      console.error('Unexpected AI format:', aiText);
+      return res.status(500).json({ error: 'AI returned invalid format' });
     }
 
-    const questions = parsed.questions.slice(
-      0,
-      questionCount
-    );
+    const questions = parsed.questions.slice(0, questionCount);
 
-    // ---------- SAVE QUESTIONS ----------
-    const questionRows = questions.map((q) => ({
+    // Save questions
+    const questionRows = questions.map(q => ({
       session_id: session.id,
       question_text: q,
       is_custom: false
     }));
 
-    const {
-      data: insertedQuestions,
-      error: insertError
-    } = await supabase
+    const { data: insertedQuestions, error: insertError } = await supabase
       .from('questions')
       .insert(questionRows)
       .select();
 
     if (insertError) {
-      console.error(insertError);
-
-      return res.status(500).json({
-        error: 'Failed to save questions'
-      });
+      console.error('Question insert error:', insertError);
+      return res.status(500).json({ error: 'Failed to save questions' });
     }
 
-    // ---------- SUCCESS ----------
     return res.status(200).json({
       success: true,
       sessionId: session.id,
-      questionIds: insertedQuestions.map(
-        (q) => q.id
-      ),
+      questionIds: insertedQuestions.map(q => q.id),
       questions
     });
 
   } catch (error) {
-    console.error(error);
-
-    return res.status(500).json({
-      error: 'Something went wrong',
-      details: error.message
-    });
+    console.error('Unhandled error in generate-questions:', error);
+    return res.status(500).json({ error: 'Something went wrong', details: error.message });
   }
 }
