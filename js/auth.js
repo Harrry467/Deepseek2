@@ -7,7 +7,13 @@ const SUPABASE_ANON_KEY =
 
 let supabase = null;
 
-// Initialise Supabase safely
+// ---------------------------------------------------------------------------
+// initSupabase
+// Returns the single shared Supabase client, creating it once.
+// Exposed globally so every page (history.html, dashboard.html, etc.) reuses
+// the SAME instance — which guarantees getSession() always sees the live
+// session that was hydrated when the page loaded.
+// ---------------------------------------------------------------------------
 async function initSupabase() {
   if (supabase) return supabase;
 
@@ -16,49 +22,41 @@ async function initSupabase() {
       'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
     );
 
-    supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-        }
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession:    true,
+        autoRefreshToken:  true,
+        detectSessionInUrl: true
       }
-    );
+    });
 
     return supabase;
   } catch (err) {
     console.error('Failed to initialise Supabase:', err);
-    alert('Authentication failed to load.');
+    alert('Authentication failed to load. Please refresh the page.');
     throw err;
   }
 }
 
-// Get auth token for API requests
+// ---------------------------------------------------------------------------
+// getAuthHeader
+// Builds the Authorization header using the current session token.
+// Returns {} (no header) if no session exists — callers should guard for this.
+// ---------------------------------------------------------------------------
 async function getAuthHeader() {
   const sb = await initSupabase();
-  const {
-    data: { session }
-  } = await sb.auth.getSession();
-
+  const { data: { session } } = await sb.auth.getSession();
   if (!session) return {};
-
-  return {
-    Authorization: `Bearer ${session.access_token}`
-  };
+  return { Authorization: `Bearer ${session.access_token}` };
 }
 
-// Get current logged in user
+// ---------------------------------------------------------------------------
+// getCurrentUser
+// ---------------------------------------------------------------------------
 async function getCurrentUser() {
   try {
     const sb = await initSupabase();
-
-    const {
-      data: { user }
-    } = await sb.auth.getUser();
-
+    const { data: { user } } = await sb.auth.getUser();
     return user || null;
   } catch (err) {
     console.error('Get user error:', err);
@@ -66,28 +64,30 @@ async function getCurrentUser() {
   }
 }
 
-// Redirect if user already logged in
+// ---------------------------------------------------------------------------
+// redirectIfLoggedIn  –  use on login/signup pages
+// ---------------------------------------------------------------------------
 async function redirectIfLoggedIn() {
   const user = await getCurrentUser();
-
-  if (user) {
-    window.location.href = 'dashboard.html';
-  }
+  if (user) window.location.href = 'dashboard.html';
 }
 
-// Protect dashboard pages
+// ---------------------------------------------------------------------------
+// requireAuth  –  use on protected pages
+// Redirects to login if there is no active session.
+// ---------------------------------------------------------------------------
 async function requireAuth() {
   const user = await getCurrentUser();
-
   if (!user) {
     window.location.href = 'login.html';
     return null;
   }
-
   return user;
 }
 
-// Logout
+// ---------------------------------------------------------------------------
+// logout
+// ---------------------------------------------------------------------------
 async function logout() {
   try {
     const sb = await initSupabase();
@@ -95,151 +95,101 @@ async function logout() {
   } catch (err) {
     console.error('Logout failed:', err);
   }
-
   window.location.href = 'index.html';
 }
 
-// Login handler
+// ---------------------------------------------------------------------------
+// Form handlers (login + signup)
+// ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  const loginForm = document.getElementById('loginForm');
 
+  // ── Login ──────────────────────────────────────────────────────────────────
+  const loginForm = document.getElementById('loginForm');
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const email =
-        document.getElementById('email')?.value?.trim();
-
-      const password =
-        document.getElementById('password')?.value;
-
-      const errorEl =
-        document.getElementById('authError');
-
+      const email    = document.getElementById('email')?.value?.trim();
+      const password = document.getElementById('password')?.value;
+      const errorEl  = document.getElementById('authError');
       if (errorEl) errorEl.textContent = '';
 
       try {
         const sb = await initSupabase();
-
-        const { error } =
-          await sb.auth.signInWithPassword({
-            email,
-            password
-          });
+        const { error } = await sb.auth.signInWithPassword({ email, password });
 
         if (error) {
           console.error(error);
-
-          if (errorEl) {
-            errorEl.textContent = error.message;
-          } else {
-            alert(error.message);
-          }
-
+          if (errorEl) errorEl.textContent = error.message;
+          else alert(error.message);
           return;
         }
 
         window.location.href = 'dashboard.html';
       } catch (err) {
         console.error(err);
-
-        if (errorEl) {
-          errorEl.textContent =
-            'Login failed. Please try again.';
-        } else {
-          alert('Login failed.');
-        }
+        if (errorEl) errorEl.textContent = 'Login failed. Please try again.';
+        else alert('Login failed.');
       }
     });
   }
 
-  // Signup handler
-  const signupForm =
-    document.getElementById('signupForm');
-
+  // ── Signup ─────────────────────────────────────────────────────────────────
+  const signupForm = document.getElementById('signupForm');
   if (signupForm) {
     signupForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const name =
-        document.getElementById('name')?.value?.trim();
-
-      const email =
-        document.getElementById('email')?.value?.trim();
-
-      const password =
-        document.getElementById('password')?.value;
-
-      const confirmPassword =
-        document.getElementById(
-          'confirmPassword'
-        )?.value;
-
-      const errorEl =
-        document.getElementById('authError');
-
+      const name            = document.getElementById('name')?.value?.trim();
+      const email           = document.getElementById('email')?.value?.trim();
+      const password        = document.getElementById('password')?.value;
+      const confirmPassword = document.getElementById('confirmPassword')?.value;
+      const errorEl         = document.getElementById('authError');
       if (errorEl) errorEl.textContent = '';
 
-      // Validation
       if (password !== confirmPassword) {
-        errorEl.textContent =
-          'Passwords do not match';
+        if (errorEl) errorEl.textContent = 'Passwords do not match';
         return;
       }
-
       if (password.length < 6) {
-        errorEl.textContent =
-          'Password must be at least 6 characters';
+        if (errorEl) errorEl.textContent = 'Password must be at least 6 characters';
         return;
       }
 
       try {
         const sb = await initSupabase();
-
-        const { error } =
-          await sb.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                full_name: name
-              }
-            }
-          });
+        const { error } = await sb.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name } }
+        });
 
         if (error) {
           console.error(error);
-
-          if (errorEl) {
-            errorEl.textContent =
-              error.message;
-          } else {
-            alert(error.message);
-          }
-
+          if (errorEl) errorEl.textContent = error.message;
+          else alert(error.message);
           return;
         }
 
-        // Auto redirect after signup
-        window.location.href =
-          'dashboard.html';
+        window.location.href = 'dashboard.html';
       } catch (err) {
         console.error(err);
-
-        if (errorEl) {
-          errorEl.textContent =
-            'Sign up failed. Please try again.';
-        } else {
-          alert('Sign up failed.');
-        }
+        if (errorEl) errorEl.textContent = 'Sign up failed. Please try again.';
+        else alert('Sign up failed.');
       }
     });
   }
 });
 
-// Make globally available
-window.getAuthHeader = getAuthHeader;
-window.getCurrentUser = getCurrentUser;
-window.requireAuth = requireAuth;
+// ---------------------------------------------------------------------------
+// Global exports
+// initSupabase is exported here so pages like history.html can call
+// `const sb = await initSupabase()` and reuse the same client without
+// creating a second instance (which would race on session hydration).
+// ---------------------------------------------------------------------------
+window.initSupabase       = initSupabase;
+window.getAuthHeader      = getAuthHeader;
+window.getCurrentUser     = getCurrentUser;
+window.requireAuth        = requireAuth;
 window.redirectIfLoggedIn = redirectIfLoggedIn;
-window.logout = logout;
+window.logout             = logout;
