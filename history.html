@@ -29,6 +29,7 @@
     .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; }
     .stat-label { font-size: .75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; }
     .stat-value { font-size: 1.8rem; font-weight: 700; color: #111827; margin-top: .2rem; }
+    .error-msg { color: #ef4444; text-align: center; padding: 2rem; }
   </style>
 </head>
 <body>
@@ -53,76 +54,125 @@
   <script src="js/auth.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
+      // 1. Guard: redirect to login if not authenticated
       await requireAuth();
 
+      const listEl  = document.getElementById('historyList');
+      const statsEl = document.getElementById('statsBar');
+
       try {
-        const authHeaders = await getAuthHeader();
-        const res = await fetch('/api/history', { headers: authHeaders });
-        if (!res.ok) throw new Error('Failed to load history');
+        // 2. FIX: reuse the already-initialised Supabase client from auth.js
+        //    so getSession() is guaranteed to return the active session.
+        //    Previously getAuthHeader() was called on a cold client and
+        //    could return {} before the session was hydrated, causing a 401.
+        const sb = await initSupabase();
+        const { data: { session } } = await sb.auth.getSession();
+
+        if (!session) {
+          // Session truly gone — send to login
+          window.location.href = 'login.html';
+          return;
+        }
+
+        const res = await fetch('/api/history', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `Server error ${res.status}`);
+        }
+
         const sessions = await res.json();
 
-        const listEl = document.getElementById('historyList');
-        const statsEl = document.getElementById('statsBar');
-
         if (!sessions.length) {
-          listEl.innerHTML = `<div class="empty-state"><p>No practice sessions yet.</p><p><a href="dashboard.html">Start practising</a> to see your history here.</p></div>`;
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <p>No practice sessions yet.</p>
+              <p><a href="dashboard.html">Start practising</a> to see your history here.</p>
+            </div>`;
           return;
         }
 
         // Overall stats
-        const allScores = sessions.flatMap(s => s.questions?.flatMap(q => q.answers?.map(a => a.score) || []) || []).filter(s => typeof s === 'number');
-        const overallAvg = allScores.length ? (allScores.reduce((a,b)=>a+b,0)/allScores.length).toFixed(1) : '—';
-        const totalAnswered = sessions.reduce((a,s) => a + (s.answeredCount||0), 0);
+        const allScores   = sessions.flatMap(s =>
+          (s.questions || []).flatMap(q =>
+            (q.answers || []).map(a => a.score)
+          )
+        ).filter(s => typeof s === 'number');
+
+        const overallAvg  = allScores.length
+          ? (allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(1)
+          : '—';
+        const totalAnswered = sessions.reduce((a, s) => a + (s.answeredCount || 0), 0);
 
         statsEl.style.display = 'grid';
         statsEl.innerHTML = `
-          <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-value">${sessions.length}</div></div>
-          <div class="stat-card"><div class="stat-label">Questions answered</div><div class="stat-value">${totalAnswered}</div></div>
-          <div class="stat-card"><div class="stat-label">Average score</div><div class="stat-value">${overallAvg}${allScores.length ? '/10' : ''}</div></div>
-        `;
+          <div class="stat-card">
+            <div class="stat-label">Sessions</div>
+            <div class="stat-value">${sessions.length}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Questions answered</div>
+            <div class="stat-value">${totalAnswered}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Average score</div>
+            <div class="stat-value">${overallAvg}${allScores.length ? '/10' : ''}</div>
+          </div>`;
 
         // Session cards
         listEl.innerHTML = sessions.map((session, si) => {
-          const scoreClass = session.avgScore === null ? '' : session.avgScore >= 7 ? '' : session.avgScore >= 5 ? 'mid' : 'low';
+          const scoreClass   = session.avgScore === null ? '' : session.avgScore >= 7 ? '' : session.avgScore >= 5 ? 'mid' : 'low';
           const scoreDisplay = session.avgScore !== null ? `${session.avgScore}/10` : 'Not marked';
-          const date = new Date(session.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+          const date         = new Date(session.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
           const questionsHTML = (session.questions || []).map(q => {
             const ans = q.answers?.[0];
             return `<div class="question-row">
               <div class="q-text">${escapeHtml(q.question_text)}</div>
-              ${ans ? `<div class="q-answer">Your answer: ${escapeHtml(ans.answer_text || '')}</div>
-              <div class="q-score">Score: ${ans.score}/10</div>` : '<div class="q-answer" style="color:#d1d5db">Not answered</div>'}
+              ${ans
+                ? `<div class="q-answer">Your answer: ${escapeHtml(ans.answer_text || '')}</div>
+                   <div class="q-score">Score: ${ans.score}/10</div>`
+                : '<div class="q-answer" style="color:#d1d5db">Not answered</div>'
+              }
             </div>`;
           }).join('');
 
-          return `<div class="session-card" onclick="toggleDetail(${si})">
-            <div class="session-meta">
-              <span class="session-badge">${escapeHtml(session.subject || '')}</span>
-              <span class="session-badge">${escapeHtml(session.topic || '')}</span>
-              <span class="session-badge">${escapeHtml(session.level || '')}</span>
-              <span class="session-date">${date}</span>
-              <span style="flex:1"></span>
-              <span class="session-score ${scoreClass}">${scoreDisplay}</span>
-            </div>
-            <div style="font-size:.85rem;color:#6b7280">${session.answeredCount || 0} of ${session.totalQuestions || 0} answered</div>
-            <div id="detail-${si}" class="session-detail">${questionsHTML}</div>
-          </div>`;
+          return `
+            <div class="session-card" onclick="toggleDetail(${si})">
+              <div class="session-meta">
+                <span class="session-badge">${escapeHtml(session.subject || '')}</span>
+                <span class="session-badge">${escapeHtml(session.topic  || '')}</span>
+                <span class="session-badge">${escapeHtml(session.level  || '')}</span>
+                <span class="session-date">${date}</span>
+                <span style="flex:1"></span>
+                <span class="session-score ${scoreClass}">${scoreDisplay}</span>
+              </div>
+              <div style="font-size:.85rem;color:#6b7280">
+                ${session.answeredCount || 0} of ${session.totalQuestions || 0} answered
+              </div>
+              <div id="detail-${si}" class="session-detail">${questionsHTML}</div>
+            </div>`;
         }).join('');
 
       } catch (err) {
-        document.getElementById('historyList').innerHTML = `<p style="color:#ef4444;text-align:center">Failed to load history: ${err.message}</p>`;
+        console.error('History load error:', err);
+        listEl.innerHTML = `
+          <p class="error-msg">
+            Failed to load history: ${escapeHtml(err.message)}<br>
+            <small>Try refreshing the page. If the problem persists, log out and back in.</small>
+          </p>`;
       }
     });
 
     function toggleDetail(idx) {
-      const el = document.getElementById(`detail-${idx}`);
-      if (el) el.classList.toggle('open');
+      document.getElementById(`detail-${idx}`)?.classList.toggle('open');
     }
 
     function escapeHtml(str) {
       const div = document.createElement('div');
-      div.textContent = str;
+      div.textContent = str ?? '';
       return div.innerHTML;
     }
   </script>
